@@ -2,4 +2,6 @@
 **.npy
 **__pycache__
 **.ipynb
+EE219_env/
+compile_commands.json
 !*.md
