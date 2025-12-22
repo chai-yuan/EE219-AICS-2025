@@ -42,4 +42,30 @@
 #define ADDR_OUTFC2         0x80f01500
 #define ADDR_OUTSM2         0x80f02000
 
+// ========== 网络结构参数 ==========
+#define INPUT_C 6
+#define INPUT_H 14
+#define INPUT_W 14
+
+#define KERNEL_NUM 4
+#define KERNEL_SIZE 3
+#define CONV_OUT_H (INPUT_H - KERNEL_SIZE + 1) // 12
+#define CONV_OUT_W (INPUT_W - KERNEL_SIZE + 1) // 12
+
+#define POOL_SIZE 2
+#define POOL_OUT_H (CONV_OUT_H / POOL_SIZE) // 6
+#define POOL_OUT_W (CONV_OUT_W / POOL_SIZE) // 6
+
+#define FC1_IN_SIZE (KERNEL_NUM * POOL_OUT_H * POOL_OUT_W) // 144
+#define FC1_OUT_SIZE 60
+
+#define FC2_IN_SIZE FC1_OUT_SIZE
+#define FC2_OUT_SIZE 10
+
+// ========== 量化/硬件参数 ==========
+#define CONV1_SC 16
+#define FC1_SC 4
+#define LUT_SIZE 256
+#define SOFTMAX_Q 16
+
 #endif 
