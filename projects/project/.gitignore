@@ -1,0 +1,5 @@
+**.bin
+**.npy
+**__pycache__
+**.ipynb
+!*.md
