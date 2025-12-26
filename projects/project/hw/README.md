@@ -2,10 +2,11 @@ VLEN            512
 SEW             64
 VREG_WIDTH      512
 VMEM_DATA   512
-| Type  | Instruction | func6  | width | Format                   | Implementation          |
-| ----- | ----------- | ------ | ----- | ------------------------ | ----------------------- |
-| LOAD  | `vle32.v`   | 000000 | 111   | vle32.v vd, rs1, vm      | vd = Mem[x[rs1]]        |
-| STORE | `vse32.v`   | 000000 | 111   | vse32.v vs3, rs1, vm     | Mem[x[rs1]] = vs3       |
+
+| Type  | Instruction | func6  | width | Format               | Implementation    |
+| ----- | ----------- | ------ | ----- | -------------------- | ----------------- |
+| LOAD  | `vle64.v`   | 000000 | 111   | vle64.v vd, rs1, vm  | vd = Mem[x[rs1]]  |
+| STORE | `vse64.v`   | 000000 | 111   | vse64.v vs3, rs1, vm | Mem[x[rs1]] = vs3 |
 
 | Type  | Instruction | func6  | func3 | Format                   | Implementation          |
 | ----- | ----------- | ------ | ----- | ------------------------ | ----------------------- |
@@ -18,7 +19,6 @@ VMEM_DATA   512
 | OPMVX | `vmul.vx`   | 100101 | 110   | vmul.vx vd, vs2, rs1, vm | vd[i] = vs2[i] * x[rs1] |
 | OPMVV | `vdiv.vv`   | 100001 | 010   | vdiv.vv vd, vs2, vs1, vm | vd[i] = vs2[i] / vs1[i] |
 | OPMVX | `vdiv.vx`   | 100001 | 110   | vdiv.vx vd, vs2, rs1, vm | vd[i] = vs2[i] / x[rs1] |
-| OPMVV | `vmv.x.s`   | 010000 | 010   | vmv.x.s rd, vs2, vx0, vm | x[rd] = vs2[0] (vs1=0)  |
 | OPIVX | `vmv.v.x`   | 010111 | 100   | vmv.v.x vd,      rs1, vm | vd[i] = x[rs1]          |
 
 
