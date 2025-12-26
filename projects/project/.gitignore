@@ -3,6 +3,7 @@
 **__pycache__
 **.ipynb
 .cache/
+build/
 EE219_env/
 compile_commands.json
 !*.md
