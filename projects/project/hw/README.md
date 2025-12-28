@@ -3,6 +3,8 @@ SEW             64
 VREG_WIDTH      512
 VMEM_DATA   512
 
+## 向量指令
+
 | Type  | Instruction | func6  | width | Format               | Implementation    |
 | ----- | ----------- | ------ | ----- | -------------------- | ----------------- |
 | LOAD  | `vle64.v`   | 000000 | 111   | vle64.v vd, rs1, vm  | vd = Mem[x[rs1]]  |
@@ -37,4 +39,11 @@ VMEM_DATA   512
 | OPIVI | `vsra.vi`    | 101001 | 011   | vsra.vi vd, vs2, uimm, vm   | vd[i] = vs2[i] >>> uimm                                   |
 | OPMVV | `vredsum.vs` | 000000 | 010   | vredsum.vs vd, vs2, vs1, vm | vd[0] = sum( vs1[0], vs2[0], vs2[1], vs2[2]..., vs2[-1] ) |
 | OPMVV | `vredmax.vs` | 000111 | 010   | vredmax.vs vd, vs2, vs1, vm | vd[0] = max( vs1[0], vs2[0], vs2[1], vs2[2]..., vs2[-1] ) |
+
+## 自定义指令
+
+| Type | Instruction | func6 | func3 | Format | Implementation |
+| ---- | ----------- | ----- | ----- | ------ | -------------- |
+|      |             |       |       |        |                |
+|      |             |       |       |        |                |
 

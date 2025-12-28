@@ -2,7 +2,6 @@
  *  一个简单的用于神经网络计算的单头文件库
  *  提供包含软实现的多种实现，使用宏控制目前的实现后端
  */
-#define HAL_NN_RVV
 
 #ifndef HAL_NN_H
 #define HAL_NN_H
@@ -85,7 +84,6 @@ void hal_conv2d_i8_i16(const int8_t *input, const int8_t *weight, int16_t *outpu
 }
 
 void hal_maxpool_2x2_i16(const int16_t *input, int16_t *output, int input_c, int input_h, int input_w) {
-
     int out_h = input_h / 2; // 假设 padding=0, stride=2
     int out_w = input_w / 2;
 
@@ -200,6 +198,7 @@ void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, 
 #endif // HAL_NN_SOFT
 
 #ifdef HAL_NN_RVV
+#include "rv_vector_ext.h"
 
 void hal_conv2d_i8_i16(const int8_t *input, const int8_t *weight, int16_t *output, const hal_conv_params_t *p) {
     for (int oc = 0; oc < p->output_c; oc++) {

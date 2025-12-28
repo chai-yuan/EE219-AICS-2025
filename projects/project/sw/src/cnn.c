@@ -2,7 +2,7 @@
 #include "trap.h"
 
 #define HAL_NN_SOFT
-#include "hal_nn.h"
+#include "libnn/hal_nn.h"
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
