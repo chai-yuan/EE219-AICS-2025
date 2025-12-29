@@ -42,8 +42,9 @@ VMEM_DATA   512
 
 ## 自定义指令
 
-| Type | Instruction | func6 | func3 | Format | Implementation |
-| ---- | ----------- | ----- | ----- | ------ | -------------- |
-|      |             |       |       |        |                |
-|      |             |       |       |        |                |
+| **Opcode** | Instruction     | func7   | func3 | Format                  | Implementation       |
+| ---------- | --------------- | ------- | ----- | ----------------------- | -------------------- |
+| 0x7B       | maxpool_24_6.32 | 0000000 | 000   | maxpool_24_6.32 rs1 rs2 | Mem[rs1] <= Mem[rs2] |
+| 0x7B       | relu_512.32     | 0000000 | 001   | relu_512.32 rs1 rs2     | Mem[rs1] <= Mem[rs2] |
+| 0x7B       | relu_512.16     | 0000000 | 010   | relu_512.16 rs1 rs2     | Mem[rs1] <= Mem[rs2] |
 
