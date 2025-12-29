@@ -1,6 +1,7 @@
 #include "model.h"
 #include "trap.h"
 
+// #define HAL_NN_CUSTOM
 #define HAL_NN_SOFT
 #include "libnn/hal_nn.h"
 

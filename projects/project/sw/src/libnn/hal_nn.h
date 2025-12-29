@@ -347,4 +347,134 @@ void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, 
 
 #endif
 
+#ifdef HAL_NN_CUSTOM
+#include "rv_custom_ext.h"
+
+void hal_conv2d_i8_i16(const int8_t *input, const int8_t *weight, int16_t *output, const hal_conv_params_t *p) {
+    for (int oc = 0; oc < p->output_c; oc++) {
+        for (int h = 0; h < p->output_h; h++) {
+            for (int w = 0; w < p->output_w; w++) {
+
+                int32_t acc = 0;
+                // CHW 格式遍历
+                for (int ic = 0; ic < p->input_c; ic++) {
+                    for (int kh = 0; kh < p->kernel_size; kh++) {
+                        for (int kw = 0; kw < p->kernel_size; kw++) {
+
+                            int img_idx = ic * (p->input_h * p->input_w) + (h + kh) * p->input_w + (w + kw);
+
+                            // 权重排列假设为: [Out_C, In_C, K_H, K_W]
+                            int w_idx = oc * (p->input_c * p->kernel_size * p->kernel_size) +
+                                        ic * (p->kernel_size * p->kernel_size) + kh * p->kernel_size + kw;
+
+                            acc += input[img_idx] * weight[w_idx];
+                        }
+                    }
+                }
+
+                int32_t res = acc / p->scale;
+                res         = CLAMP(res, 0, 32768);
+
+                int out_idx     = oc * (p->output_h * p->output_w) + h * p->output_w + w;
+                output[out_idx] = (int16_t)res;
+            }
+        }
+    }
+}
+
+void hal_maxpool_2x2_i16(const int16_t *input, int16_t *output, int input_c, int input_h, int input_w) {
+    int in_idx  = 0;
+    int out_idx = 0;
+
+    for (int i = 0; i < 6 * input_c; i++) {
+        maxpool_24_6(&input[in_idx], &output[out_idx]);
+        in_idx += 24;
+        out_idx += 6;
+    }
+}
+
+// FC1: MatMul -> ReLU -> Scale
+void hal_fc_i16_i32_relu_scale(const int16_t *input, const int16_t *weight, int32_t *output, const hal_fc_params_t *p) {
+    for (int i = 0; i < p->out_features; i++) {
+        int32_t acc = 0;
+        for (int j = 0; j < p->in_features; j++) {
+            // weight shape: [Out, In]
+            acc += (int32_t)input[j] * weight[i * p->in_features + j];
+        }
+
+        if (acc < 0)
+            acc = 0; // ReLU
+
+        acc = acc / p->scale;
+        acc = CLAMP(acc, 0, 32768);
+
+        output[i] = acc;
+    }
+}
+
+// FC2: MatMul -> Add Bias
+void hal_fc_i32_i32_bias(const int32_t *input, const int32_t *weight, const int32_t *bias, int32_t *output,
+                         int in_features, int out_features) {
+    for (int i = 0; i < out_features; i++) {
+        int32_t acc = 0;
+        for (int j = 0; j < in_features; j++) {
+            acc += input[j] * weight[i * in_features + j];
+        }
+        acc += bias[i];
+        output[i] = acc;
+    }
+}
+
+// Softmax
+void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, int size, int lut_size) {
+    const int Q_16       = 1 << 16;
+    const int SAFE_SHIFT = 2;
+
+    int32_t x_max = -2147483648;
+#define MAX_SOFTMAX_SIZE 100
+    int32_t input_q16[MAX_SOFTMAX_SIZE];
+    int32_t exp_vals[MAX_SOFTMAX_SIZE];
+
+    if (size > MAX_SOFTMAX_SIZE)
+        return; // Error handling needed in real code
+
+    for (int i = 0; i < size; i++) {
+        int32_t val  = CLAMP(input[i], -32767, 32767);
+        input_q16[i] = val << 16;
+        if (input_q16[i] > x_max) {
+            x_max = input_q16[i];
+        }
+    }
+
+    int32_t exp_sum = 0;
+
+    for (int i = 0; i < size; i++) {
+        int32_t delta = input_q16[i] - x_max;
+        if (delta < -8 * Q_16)
+            delta = -8 * Q_16;
+
+        int64_t idx_num = (int64_t)(delta + 8 * Q_16) * (lut_size - 1);
+        int32_t idx     = (int32_t)(idx_num / (8 * Q_16));
+
+        idx         = CLAMP(idx, 0, lut_size - 1);
+        exp_vals[i] = lut[idx];
+        exp_sum += exp_vals[i];
+    }
+
+    if (exp_sum <= 0)
+        exp_sum = 1;
+
+    int32_t exp_sum_shr = exp_sum >> SAFE_SHIFT;
+    if (exp_sum_shr <= 0)
+        exp_sum_shr = 1;
+
+    for (int i = 0; i < size; i++) {
+        int32_t exp_delta_shr = exp_vals[i] >> SAFE_SHIFT;
+        int64_t num           = (int64_t)exp_delta_shr * Q_16;
+        output[i]             = (int32_t)(num / exp_sum_shr);
+    }
+}
+
+#endif
+
 #endif // HAL_NN_H

@@ -3,6 +3,7 @@
 **__pycache__
 **.ipynb
 .cache/
+*.vcd
 build/
 EE219_env/
 compile_commands.json

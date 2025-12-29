@@ -18,6 +18,17 @@ int16_t my_rand() {
 int16_t src_buf[TEST_SIZE];
 int16_t dst_buf1[TEST_SIZE / 2], dst_buf2[TEST_SIZE / 2];
 
+void __maxpool_2x2_i16(const int16_t *input, int16_t *output, int input_c, int input_h, int input_w) {
+    int in_idx  = 0;
+    int out_idx = 0;
+
+    for (int i = 0; i < 6 * input_c; i++) {
+        maxpool_24_6(&input[in_idx], &output[out_idx]);
+        in_idx += 24;
+        out_idx += 6;
+    }
+}
+
 int main() {
     printf("Initializing random data...\n");
     for (int i = 0; i < TEST_SIZE; i++) {
@@ -27,11 +38,11 @@ int main() {
     // 软实现计算
     hal_maxpool_2x2_i16(src_buf, dst_buf1, KERNEL_NUM, CONV_OUT_H, CONV_OUT_W);
     // 硬件计算 (DUT)
-    maxpool_24_6(&src_buf[0], &dst_buf2[0]);
+    __maxpool_2x2_i16(src_buf, dst_buf2, KERNEL_NUM, CONV_OUT_H, CONV_OUT_W);
 
     // 打印结果，并使用check(bool)函数检测比较
     int error_cnt = 0;
-    int out_len   = 6; // 简化测试，仅比较前6个
+    int out_len   = TEST_SIZE / 2;
 
     for (int i = 0; i < out_len; i++) {
         if (dst_buf1[i] != dst_buf2[i]) {
