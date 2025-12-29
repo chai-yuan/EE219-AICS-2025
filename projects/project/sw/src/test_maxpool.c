@@ -6,7 +6,7 @@
 #define HAL_NN_SOFT
 #include "libnn/hal_nn.h"
 
-#define TEST_SIZE 512
+#define TEST_SIZE 800
 
 static uint32_t _rand_seed = 42;
 
@@ -42,7 +42,7 @@ int main() {
 
     // 打印结果，并使用check(bool)函数检测比较
     int error_cnt = 0;
-    int out_len   = TEST_SIZE / 2;
+    int out_len   = KERNEL_NUM * (CONV_OUT_H / 2) * (CONV_OUT_W / 2);
 
     for (int i = 0; i < out_len; i++) {
         if (dst_buf1[i] != dst_buf2[i]) {
@@ -51,6 +51,7 @@ int main() {
     }
 
     if (error_cnt == 0) {
+        printf("Test PASS\n");
         check(1);
     } else {
         printf("Total errors: %d\n", error_cnt);

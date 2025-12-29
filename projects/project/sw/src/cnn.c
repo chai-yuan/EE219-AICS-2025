@@ -1,8 +1,8 @@
 #include "model.h"
 #include "trap.h"
 
-// #define HAL_NN_CUSTOM
-#define HAL_NN_SOFT
+#define HAL_NN_CUSTOM
+// #define HAL_NN_SOFT
 #include "libnn/hal_nn.h"
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
