@@ -1,6 +1,8 @@
 `include "ram.v"
 
 `define VECTOR_ENALBE
+`define ACC_ENALBE
+
 
 `ifdef VECTOR_ENALBE
 `include "ram_vector.v"
@@ -115,6 +117,40 @@ RAMHelper RAM(
     .wmask            ( vram_w_mask ),
     .wen              ( vram_w_ena  )
   );
-`endif 
+`endif
+
+`ifdef ACC_ENABLE
+  wire [63:0] acc_raddr; //TODO: 译码得到,标量寄存器的值?
+  wire [63:0] acc_waddr; //TODO: 译码得到,标量寄存器的值
+  wire [511:0] acc_rdata;
+  wire [511:0] acc_wdata;
+  wire acc_ren; //TODO: maxpool_inst 译码得到
+  wire acc_wen;
+  wire inst_maxpool; // 译码使能
+  wire acc_wmask;
+
+  assign acc_ren = inst_maxpool ? 1'b1 : 1'b0;
+  assign acc_wen = inst_maxpool ? 1'b1 : 1'b0;
+  assign acc_wmask = inst_maxpool ? {416'b0, 96{1'b1}} : 512'b0;
+
+  // 纯组合逻辑,可以立马取到值
+  maxpool_24_6 MAXPOOL_24_6 (
+    .raddr(acc_raddr),
+    .waddr(acc_waddr),
+    .rdata(acc_rdata[383:0]),
+    .wdata(acc_wdata[95:0])
+  );
+
+  RAMVectorHelper RAM_ACC(
+    .clk              ( clock ),
+    .ren              (acc_ren),
+    .rIdx             (acc_raddr),
+    .rdata            (acc_rdata),
+    .wIdx             (acc_waddr),
+    .wdata            (acc_wdata),
+    .wmask            (acc_wmask),
+    .wen              (acc_wen)
+  );
+`endif
 
 endmodule
