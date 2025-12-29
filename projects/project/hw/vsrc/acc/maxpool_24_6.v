@@ -13,7 +13,7 @@ module maxpool_24_6 (
         .b(rdata[16*(i+2)-1 : 16*(i+1)]),
         .c(rdata[16*(i+13)-1 : 16*(i+12)]),
         .d(rdata[16*(i+14)-1 : 16*(i+13)]),
-        .max_val(wdata[16*(i>>1 + 1) -1 : 16*(i>>1)])
+        .max_val(wdata[16*((i>>1) + 1) -1 : 16*(i>>1)])
       );
     end
   endgenerate
