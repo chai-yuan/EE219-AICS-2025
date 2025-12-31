@@ -23,7 +23,7 @@ You need to fully implement the operations listed in the table below
 ---     | ---             | ---     | ---     | ---    | ---    | ---    | ---    | ---
 conv    | Convolutional   | 6x14x14 | 4x12x12 | int 8  | int 16 | int 8  |        | ReLU 
 pool    | Max pool        | 4x12x12 | 4x6x6   | int 16 | int 16 |        |        | None               
-fc1     | Fully-connected | 180     | 60      | int 16 | int 32 | int 16 |        | ReLU                  
+fc1     | Fully-connected | 144   | 60      | int 16 | int 32 | int 16 |        | ReLU                  
 fc2     | Fully-connected | 60      | 10      | int 32 | int 32 | int 32 | int 32 | None                  
 softmax |                 | 10      | 10      | int 32 | Q16.16 |        |        | None                  
 
