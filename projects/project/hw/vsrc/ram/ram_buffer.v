@@ -31,7 +31,7 @@ module ram_buffer(
   // x_width 最大是15
   genvar i;
   for (i=0; i<8; i = i+1) begin
-    assign rdata_t[64*(i+1)-1: 64*i] = ram_read_helper(ren,read_addr>>1);
+    assign rdata_t[64*(i+1)-1: 64*i] = ram_read_helper(ren,read_addr>>1 + i);
   end
 
   // 写buffer, X,W是不需要的, 只有Y会用到

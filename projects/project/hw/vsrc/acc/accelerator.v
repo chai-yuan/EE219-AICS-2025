@@ -113,13 +113,13 @@ module accelerator (
   // 矩阵乘法 Unit
   // 目前得保证base地址低三位都是0,因为暂时不太好做处理
   // ===========================================================
-  wire [63:0] x_width;
-  wire [63:0] x_height;
-  wire [63:0] w_width;
-  wire [63:0] w_height; //equal to x_width
-  wire [63:0] x_base;
-  wire [63:0] w_base;
-  wire [63:0] y_base;
+  reg [63:0] x_width;
+  reg [63:0] x_height;
+  reg [63:0] w_width;
+  reg [63:0] w_height; //equal to x_width
+  reg [63:0] x_base;
+  reg [63:0] w_base;
+  reg [63:0] y_base;
   wire buffer_ren;
   wire y_wen;
   wire [511:0] y_wdata;
@@ -133,13 +133,46 @@ module accelerator (
 
   assign pc_stall = inst_matrix_cal ? !matrix_cal_ok : 0;
 
-  assign x_height = inst_matrix_set_x ? rs1_data : 0;
-  assign x_width = inst_matrix_set_x ? rs2_data : 0;
-  assign w_height = inst_matrix_set_w ? rs1_data : 0;
-  assign w_width = inst_matrix_set_w ? rs2_data : 0;
-  assign x_base = inst_matrix_addr ? rs2_data : 0;
-  assign w_base = inst_matrix_addr ? rs1_data : 0;
-  assign y_base = inst_matrix_cal ? rs1_data : 0;
+  always @(posedge clk) begin
+    if (rst) begin
+      x_height <= 0;
+      x_width  <= 0;
+      w_height <= 0;
+      w_width  <= 0;
+      x_base   <= 0;
+      w_base   <= 0;
+      y_base   <= 0;
+    end else begin
+      if (inst_matrix_set_x) begin
+        x_height <= rs1_data;
+        x_width <= rs2_data;
+      end else if (inst_matrix_set_w) begin
+        w_height <= rs1_data;
+        w_width <= rs2_data;
+      end else if (inst_matrix_addr) begin
+        x_base <= rs2_data;
+        w_base <= rs1_data;
+      end else if (inst_matrix_cal) begin
+        y_base <= rs1_data;
+      end else begin
+        x_height <= x_height;
+        x_width  <= x_width ;
+        w_height <= w_height;
+        w_width  <= w_width ;
+        x_base   <= x_base  ;
+        w_base   <= w_base  ;
+        y_base   <= y_base  ;
+      end
+    end
+  end
+  // assign x_height = inst_matrix_set_x ? rs1_data : 0;
+  // assign x_width  = inst_matrix_set_x ? rs2_data : 0;
+  // assign w_height = inst_matrix_set_w ? rs1_data : 0;
+  // assign w_width  = inst_matrix_set_w ? rs2_data : 0;
+  // assign x_base   = inst_matrix_addr ? rs2_data : 0;
+  // assign w_base   = inst_matrix_addr ? rs1_data : 0;
+  // assign y_base   = inst_matrix_cal ? rs1_data : 0;
+
   assign y_waddr = y_base + {32'b0, y_waddr_offset};
 
   always @(*) begin
@@ -163,7 +196,7 @@ module accelerator (
       .read_times(x_width[3:0]),
       .rIdx ((x_base - `PC_START) >> 2),
       .rdata(x_buffer),
-      .wIdx ((y_waddr - `PC_START) >> 2),
+      .wIdx ((y_waddr - `PC_START) >> 3),
       .wdata(y_buffer),
       .wmask(y_wmask),
       .wen  (y_wen)
