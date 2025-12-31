@@ -17,6 +17,12 @@ module accelerator (
   assign rs2 = inst[24:20];
 
   wire inst_maxpool;
+  wire inst_matrix_set_w;
+  wire inst_matrix_set_x;
+  wire inst_matrix_addr;
+  wire inst_matrix_cal;
+
+  // MAXPOOL
   wire [63:0] acc_raddr;
   wire [63:0] acc_waddr;
   wire [511:0] acc_rdata;
@@ -25,18 +31,29 @@ module accelerator (
   wire acc_wen;
   wire [511:0] maxpool_wmask;
   reg [511:0] acc_wmask;
-
   reg [511:0] maxpool_rdata; //为了使用always*,只能用reg,但实际还是wire
   wire [511:0] maxpool_wdata;
 
-  assign inst_maxpool = (opcode == 7'b1111011) && (fun3 == 3'b000);
+  // 矩阵计算相关控制信号
+  wire xw_buffer_read;
+  wire matrix_cal_ok; //计算完成信号
+
+  assign inst_maxpool      = (opcode == 7'b1111011) && (fun3 == 3'b000);
+  assign inst_matrix_set_w = (opcode == 7'b1111011) && (fun3 == 3'b011);
+  assign inst_matrix_set_x = (opcode == 7'b1111011) && (fun3 == 3'b100);
+  assign inst_matrix_addr  = (opcode == 7'b1111011) && (fun3 == 3'b101);
+  assign inst_matrix_cal   = (opcode == 7'b1111011) && (fun3 == 3'b110);
+
   assign acc_ren = inst_maxpool ? 1'b1 : 1'b0;
   assign acc_wen = inst_maxpool ? 1'b1 : 1'b0;
   assign maxpool_wmask = inst_maxpool ? {{416'b0}, {96{1'b1}}} : 512'b0;
   assign acc_waddr = rs1_data;
   assign acc_raddr = rs2_data;
 
-  assign pc_stall = 0;
+
+  // ===========================================================
+  // maxpool Unit
+  // ===========================================================
 
   always @(*) begin
     case (acc_raddr[2:1])  // 提取第 1, 2 位作为选择信号
@@ -91,5 +108,93 @@ module accelerator (
       .wmask(acc_wmask),
       .wen  (acc_wen)
   );
+
+  // ===========================================================
+  // 矩阵乘法 Unit
+  // 目前得保证base地址低三位都是0,因为暂时不太好做处理
+  // ===========================================================
+  wire [63:0] x_width;
+  wire [63:0] x_height;
+  wire [63:0] w_width;
+  wire [63:0] w_height; //equal to x_width
+  wire [63:0] x_base;
+  wire [63:0] w_base;
+  wire [63:0] y_base;
+  wire buffer_ren;
+  wire y_wen;
+  wire [511:0] y_wdata;
+  wire [63:0] y_waddr;
+  wire [31:0] y_waddr_offset;
+  reg [511:0] y_wmask;
+
+  wire [511:0] x_buffer;
+  wire [511:0] w_buffer;
+  reg [511:0] y_buffer;
+
+  assign pc_stall = inst_matrix_cal ? !matrix_cal_ok : 0;
+
+  assign x_height = inst_matrix_set_x ? rs1_data : 0;
+  assign x_width = inst_matrix_set_x ? rs2_data : 0;
+  assign w_height = inst_matrix_set_w ? rs1_data : 0;
+  assign w_width = inst_matrix_set_w ? rs2_data : 0;
+  assign x_base = inst_matrix_addr ? rs2_data : 0;
+  assign w_base = inst_matrix_addr ? rs1_data : 0;
+  assign y_base = inst_matrix_cal ? rs1_data : 0;
+  assign y_waddr = y_base + {32'b0, y_waddr_offset};
+
+  always @(*) begin
+    case (y_waddr[2])
+      1'b0: begin
+        y_buffer = y_wdata;
+        y_wmask = {512{1'b1}};
+      end
+      1'b1: begin
+        y_buffer = y_wdata << 32;
+        y_wmask = {{480{1'b1}}, {32'b0}};
+      end
+    endcase
+  end
+
+
+  ram_buffer XY_BUFFER(
+      .clk  (clk),
+      .xw_width(x_width),
+      .ren  (buffer_ren),
+      .read_times(x_width[3:0]),
+      .rIdx ((x_base - `PC_START) >> 2),
+      .rdata(x_buffer),
+      .wIdx ((y_waddr - `PC_START) >> 2),
+      .wdata(y_buffer),
+      .wmask(y_wmask),
+      .wen  (y_wen)
+  );
+  ram_buffer W_BUFFER(
+      .clk  (clk),
+      .xw_width(w_width),
+      .ren  (buffer_ren),
+      .read_times(w_width[3:0]),
+      .rIdx ((w_base - `PC_START) >> 2),
+      .rdata(w_buffer),
+      .wIdx (),
+      .wdata(),
+      .wmask(),
+      .wen  ()
+  );
+
+  systolic_array MATRIX_CAL (
+    .clk (clk),
+    .rst_n(inst_matrix_cal), //start, inst_matrix_cal
+    .M(x_height[31:0]),
+    .N(x_width[31:0]),
+    .K(w_width[31:0]),
+    .X(x_buffer),
+    .W(w_buffer),
+    .Y(y_wdata),
+    .buffer_ren(buffer_ren),
+    .mem_w_en(y_wen),
+    .mem_addr(y_waddr_offset), //从0开始,需要加上基地址,同时他也是32位的
+    .done(matrix_cal_ok)
+  );
+
 
 endmodule
