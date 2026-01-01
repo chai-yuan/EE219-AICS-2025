@@ -18,3 +18,6 @@
 `define VRAM_DATA_BUS   `VLEN-1 : 0
 
 `define ALU_OP_BUS      7  : 0
+
+// 最大支持 lane 数（SEW=8）
+`define MAX_LANES 8

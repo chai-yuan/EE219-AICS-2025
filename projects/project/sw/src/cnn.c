@@ -24,6 +24,9 @@ typedef struct {
     int32_t *fc2_out;
     int32_t *softmax_out;
 } FeatureMaps;
+#define INST_OPV_BIN(funct6, vm, vs2, vs1, funct3, vd, opcode) 0b##funct6##vm##vs2##vs1##funct3##vd##opcode
+#define WORD(inst) ".word "#inst""
+#define ASM_CUSTOM(inst) WORD(inst)
 
 void layer_conv2d(const int8_t *input, const int8_t *weight, int16_t *output, int scale) {
     for (int oc = 0; oc < KERNEL_NUM; oc++) {
@@ -35,14 +38,46 @@ void layer_conv2d(const int8_t *input, const int8_t *weight, int16_t *output, in
                 // 卷积运算：遍历输入通道和核尺寸
                 for (int ic = 0; ic < INPUT_C; ic++) {
                     for (int kh = 0; kh < KERNEL_SIZE; kh++) {
-                        for (int kw = 0; kw < KERNEL_SIZE; kw++) {
-                            // 计算扁平化索引 (NCHW 格式)
-                            int img_idx = ic * (INPUT_H * INPUT_W) + (h + kh) * INPUT_W + (w + kw);
-                            int w_idx = oc * (INPUT_C * KERNEL_SIZE * KERNEL_SIZE) + ic * (KERNEL_SIZE * KERNEL_SIZE) +
-                                        kh * KERNEL_SIZE + kw;
+                        
+                        int img_idx = ic * (INPUT_H * INPUT_W) + (h + kh) * INPUT_W + (w );
+                        int w_idx = oc * (INPUT_C * KERNEL_SIZE * KERNEL_SIZE) + ic * (KERNEL_SIZE * KERNEL_SIZE) +
+                                        kh * KERNEL_SIZE ;
+                        // v0 = vle32(input + img_idx);
+                        asm volatile (
+                            "mv a0, %0\n"
+                            :
+                            : "r"(input + img_idx)
+                            : "a0"
+                        );
 
-                            acc += input[img_idx] * weight[w_idx];
-                        }
+                        INST_OPV_BIN( 000000, 1, 00000, 00000, 111, 00000, 0000111 ) 
+                        // v1 = vle32(weight + w_idx);
+                        asm volatile (
+                            "mv a1, %0\n"
+                            :
+                            : "r"(weight + w_idx)
+                            : "a1"
+                        );
+
+                        INST_OPV_BIN( 000000, 1, 00000, 00001, 111, 00001, 0000111 ) 
+                        // v1 = vmul(v0, v1);
+                        INST_OPV_BIN( 100101, 1, 00000, 00001, 010, 00001, 1010111 ) 
+                        // v0 =0
+                        INST_OPV_BIN( 010111, 1, 00000, 00000, 100, 00000, 1010111 ) 
+                        // v2 = vredsum(v1, v0);
+                        INST_OPV_BIN( 000000, 1, 00000, 00001, 010, 00010, 1010111 ) 
+                        // a0 = v2[0];
+                        INST_OPV_BIN( 010000, 1, 00010, 00000, 010, 01010, 1010111 ) 
+                        // reg_a0 =a0
+                        int32_t reg_a0;
+                        asm volatile (
+                            "mv %0, a0\n"
+                            : "=r"(reg_a0)
+                            :
+                            : "a0"
+                        );
+                        acc += reg_a0;
+                        acc += input[img_idx+8] * weight[w_idx+8];
                     }
                 }
 

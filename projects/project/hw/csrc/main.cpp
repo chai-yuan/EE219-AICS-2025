@@ -11,7 +11,7 @@
 
 using namespace std;
 
-// #define DUMP_WAVE_ENABLE
+#define DUMP_WAVE_ENABLE
 #define SAVE_DATA_ENABLE
 
 #define ADDR_BASE		0x80000000

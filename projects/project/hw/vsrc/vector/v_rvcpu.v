@@ -16,7 +16,12 @@ module v_rvcpu(
     output                      vram_w_ena,
     output  [`VRAM_ADDR_BUS]    vram_w_addr,
     output  [`VRAM_DATA_BUS]    vram_w_data,
-    output  [`VRAM_DATA_BUS]    vram_w_mask
+    output  [`VRAM_DATA_BUS]    vram_w_mask,
+
+    
+  output  reg               rd_w_en_o,
+  output  reg [`SREG_ADDR_BUS]    rd_addr_o,
+  output  reg [`SREG_BUS]   scalar_o
 );
 
 //alu
@@ -47,6 +52,11 @@ wire    [`VREG_BUS]         vs1_data        ;
 wire                        vs2_en          ;
 wire    [`VREG_ADDR_BUS]    vs2_addr        ;
 wire    [`VREG_BUS]         vs2_data        ;
+
+wire                       vsetvl_en       ;
+wire  [2:0]                 vsew_req        ;
+wire  [2:0]                 csr_vsew       ;
+
 v_inst_decode V_ID (
     .clk            ( clk           ),
     .rst            ( rst           ),
@@ -76,7 +86,24 @@ v_inst_decode V_ID (
     .vid_wb_en_o     ( vid_wb_en      ),
     .vid_wb_sel_o    ( vid_wb_sel     ),
     .vid_wb_addr_o   ( vid_wb_addr    ),
-    .vid_wb_from_rs1 ( vid_wb_f_rs1   )
+    .vid_wb_from_rs1 ( vid_wb_f_rs1   ),
+
+    .rd_w_en_o       ( rd_w_en_o      ),
+    .rd_addr_o       ( rd_addr_o      ),
+
+    .vsetvl_en_o     ( vsetvl_en   ),
+    .vsew_req_o      ( vsew_req    )
+);
+
+v_csr VCSR(
+  .clk(clk),
+  .rst(rst),
+
+  // vsetvl 接口
+  .vsetvl_en(vsetvl_en),
+  .vsew_req(vsew_req),   // 00:e8 01:e16 10:e32 11:e64
+
+  .csr_vsew(csr_vsew)
 );
 v_mem  V_MEM (
     .clk            ( clk           ),
@@ -92,6 +119,7 @@ v_mem  V_MEM (
     .vram_r_data_i     ( vram_r_data    ),
     .vram_w_ena_o      ( vram_w_ena     ),
     .vram_w_addr_o     ( vram_w_addr    ),
+    .csr_vsew_i         ( csr_vsew      ),
     .vram_w_mask_o     ( vram_w_mask    ),
     .vram_w_data_o     ( vram_w_data    )
 );
@@ -113,12 +141,12 @@ v_regfile V_REG(
     .vs2_data_o     (vs2_data)
 );
 v_execute V_ALU (
-    .clk            ( clk           ),
-    .rst            ( rst           ),
     .valu_opcode_i  ( valu_opcode    ),
     .operand_v1_i   ( operand_v1     ),
     .operand_v2_i   ( operand_v2     ),
-    .valu_result_o  ( valu_result    )
+    .valu_result_o  ( valu_result    ),
+    .vsew_i         ( csr_vsew       ),
+    .scalar_o       ( scalar_o       )
 );
 v_write_back V_WB (
     .clk             ( clk             ),
