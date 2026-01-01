@@ -86,8 +86,22 @@ RAMHelper RAM(
   wire [63:0]   vram_w_addr ;
   wire [511:0]  vram_w_data ;
   wire [511:0]  vram_w_mask ;
-
+  wire          rd_w_en_o;
+  wire [4:0]    rd_addr_o;
+  wire [63:0]   scalar_o;
   assign vec_rs1_data = vec_rs1_r_ena ? regs[vec_rs1_r_addr]  : 0 ;
+  // integer i;
+  // always @(posedge clock) begin
+  //   if ( reset == 1'b1 ) begin
+  //       for(i=0; i<32; i=i+1) begin
+  //           regs[ i ] <= {64{1'b0}} ;
+  //       end
+  //   end else begin
+  //       if ( rd_w_en_o == 1'b1) begin
+  //           regs[ rd_addr_o ] <= scalar_o ;
+  //       end 
+  //   end
+  // end
   v_rvcpu RV_VECTOR(
     .clk              ( clock ),
     .rst              ( reset ),
@@ -105,7 +119,10 @@ RAMHelper RAM(
     .vram_w_ena       ( vram_w_ena ),
     .vram_w_addr      ( vram_w_addr ),
     .vram_w_data      ( vram_w_data ),
-    .vram_w_mask      ( vram_w_mask )
+    .vram_w_mask      ( vram_w_mask ),
+    .rd_w_en_o        ( rd_w_en_o ),
+    .rd_addr_o        ( rd_addr_o ),
+    .scalar_o         ( scalar_o )
   );
   RAMVectorHelper RAM_VECOTR(
     .clk              ( clock ),

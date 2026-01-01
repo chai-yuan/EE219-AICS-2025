@@ -8,3 +8,4 @@ build/
 EE219_env/
 compile_commands.json
 !*.md
+top.vcd

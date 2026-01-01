@@ -19,11 +19,9 @@ module v_inst_decode #(
   output  reg [REG_AW-1:0]    rs1_addr_o,
   input   [REG_DW-1:0]        rs1_dout_i,
 
-//   output  reg               rd_w_en_o,
-//   output  reg [REG_AW-1:0]    rd_addr_o,
-//   output  reg [VREG_DW-1:0]   v_data_o,
-//   output  reg               rd_wb_to_o,
-
+  output  reg               rd_w_en_o,
+  output  reg [REG_AW-1:0]    rd_addr_o,
+  
   output  reg                vs1_en_o,
   output  reg [VREG_AW-1:0]   vs1_addr_o,
   input   [VREG_DW-1:0]     vs1_dout_i,
@@ -46,7 +44,9 @@ module v_inst_decode #(
   output  reg                vid_wb_sel_o,
   output  reg [VREG_AW-1:0]   vid_wb_addr_o,
 
-  output  reg                vid_wb_from_rs1
+  output  reg                vid_wb_from_rs1,
+  output  reg                vsetvl_en_o,
+  output  reg [2:0]          vsew_req_o
 );
 
   localparam VALU_OP_NOP        = 8'd0  ;
@@ -95,15 +95,16 @@ assign funct6=inst_i[31:26];
 assign mop=inst_i[27:26];
 assign mew=inst_i[28];
 assign nf=inst_i[31:29];
+wire [11:0] vtypei=inst_i[31:20];
+wire [2:0] vtype_vsew=vtypei[8:6];
+
 //
 always @(*) begin
   rs1_en_o=1'b0;
   rs1_addr_o={REG_AW{1'b0}};
 
-//   rd_w_en_o=1'b0;
-//   rd_addr_o={REG_AW{1'b0}};
-//   v_data_o ={VREG_DW{1'b0}};
-//   rd_wb_to_o=1'd0;
+  rd_w_en_o=1'b0;
+  rd_addr_o={REG_AW{1'b0}};
 
   vs1_en_o=1'b0;
   vs1_addr_o={VREG_AW{1'b0}};
@@ -126,6 +127,8 @@ always @(*) begin
   vid_wb_addr_o={REG_AW{1'b0}};
 
   vid_wb_from_rs1=1'b0;
+
+  vsetvl_en_o=1'b0;
   case(opcode)
     `OPCODE_VEC:begin
       case(funct3)
@@ -157,10 +160,15 @@ always @(*) begin
             `FUNCT6_VSRA:begin
               valu_opcode_o=VALU_OP_VSRA;
             end
+            
             default:begin
             end
           endcase
         end
+        `FUNCT3_SETVI:begin
+              vsetvl_en_o=1'b1;
+              vsew_req_o=vtype_vsew;
+            end
         `FUNCT3_MVV:begin //vmul.vv vdiv.vv vmv.x.s
           vs1_en_o=1'b1;
           vs1_addr_o=vs1;
@@ -186,11 +194,9 @@ always @(*) begin
             end
             `FUNCT6_VMV_X_S:begin
               //scarlar
-            //   rd_w_en_o=1'b1;
-            //   rd_addr_o=rd;
-            //   v_data_o=vs2_dout_i;
-            //   rd_wb_to_o=1'd1;
-            //   valu_opcode_o=VALU_OP_VMV_X_S;
+              rd_w_en_o=1'b1;
+              rd_addr_o=rd;
+              valu_opcode_o=VALU_OP_VMV_X_S;
             end
             `FUNCT6_VREDSUM:begin
               //wb

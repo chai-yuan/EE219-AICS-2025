@@ -47,6 +47,5 @@ int main(){
     vadd_vv(reg_vx1, reg_vx1, reg_vx2);
     vadd_vx(reg_vx2, reg_vx1, reg_vx2);
     vadd_vi(reg_vx2, reg_vx0, reg_vx2);
-
     return 0 ;
 }
