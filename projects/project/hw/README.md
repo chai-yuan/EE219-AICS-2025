@@ -47,8 +47,8 @@ VMEM_DATA   512
 | 0x7B       | maxpool_24_6.32 | 0000000 | 000   | maxpool_24_6.32 rs1 rs2 | Mem[rs1] <= Mem[rs2]      |
 | 0x7B       | relu_512.32     | 0000000 | 001   | relu_512.32 rs1 rs2     | Mem[rs1] <= Mem[rs2]      |
 | 0x7B       | relu_512.16     | 0000000 | 010   | relu_512.16 rs1 rs2     | Mem[rs1] <= Mem[rs2]      |
-| 0x7B       | matrix_set_w    | 0000000 | 011   | matrix_set_w rs1 rs2    | w_h <= rs1 w_w <= rs2     |
-| 0x7B       | matrix_set_x    | 0000000 | 100   | matrix_set_x rs1 rs2    | x_h <= rs1 x_w <= rs2     |
+| 0x7B       | matrix_set_a    | 0000000 | 011   | matrix_set_a rs1 rs2    | w_h <= rs1 w_w <= rs2     |
+| 0x7B       | matrix_set_b    | 0000000 | 100   | matrix_set_b rs1 rs2    | x_h <= rs1 x_w <= rs2     |
 | 0x7B       | matrix_addr     | 0000000 | 101   | matrix_addr rs1 rs2     | waddr <= rs1 xaddr <= rs2 |
 | 0x7B       | matrix_cal      | 0000000 | 110   | matrix_cal rs1 rs2      | addr <= rs1               |
 

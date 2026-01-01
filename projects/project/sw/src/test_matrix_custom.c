@@ -18,8 +18,8 @@ _Alignas(16) int32_t dst_soft[M_DIM * N_DIM];
 _Alignas(16) int32_t dst_hard[M_DIM * N_DIM];
 
 void matmul_hardware_custom(int32_t *A, int32_t *B, int32_t *C, int M, int K, int N) {
-    matrix_set_w(M, K);
-    matrix_set_x(K, N);
+    matrix_set_a(M, K);
+    matrix_set_b(K, N);
     _Alignas(16) int32_t temp_A[M_DIM * K_DIM];
     helper_matrix_T(A, temp_A, K, N);
     matrix_addr(temp_A, B);
