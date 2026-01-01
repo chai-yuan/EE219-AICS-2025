@@ -13,8 +13,8 @@ module ram_buffer(
 );
   wire [63:0] read_addr;
   wire [511:0] rdata_t;
-  assign read_addr = rIdx + xw_width*read_cnt;
-  assign rdata = read_addr[0] ? rdata_t >> 32 : rdata_t;
+  assign read_addr = rIdx + {60'b0,read_cnt};
+  assign rdata = ren & (read_cnt != read_times) ? rdata_t : 512'b0;
   // 读计数, 用来分周期,输出X_buffer[i] 或 W_buffer[i]
   reg [3:0] read_cnt;
   always @(posedge clk) begin
@@ -30,9 +30,14 @@ module ram_buffer(
   end
   // x_width 最大是15
   genvar i;
-  for (i=0; i<8; i = i+1) begin
-    assign rdata_t[64*(i+1)-1: 64*i] = ram_read_helper(ren,read_addr>>1 + i);
+  for (i=0; i<16; i = i+1) begin : gen_read_block
+    wire [63:0] full_data;
+    assign full_data = ram_read_helper(ren, (read_addr + i*xw_width)>>1);
+    assign rdata_t[32*(i+1)-1: 32*i] = ((read_addr + i*xw_width) & 64'b1) == 64'b1 ? full_data[63:32] : full_data[31:0];
   end
+  // for (i=0; i<8; i = i+1) begin
+  //   assign rdata_t[64*(i+1)-1: 64*i] = ram_read_helper(ren,(read_addr>>1) + i);
+  // end
 
   // 写buffer, X,W是不需要的, 只有Y会用到
   // 写计数, 用来分周期,...
@@ -43,3 +48,11 @@ module ram_buffer(
     end  
   end
 endmodule 
+//
+// 01 02 03
+// 04 05 01
+// 02 03 04
+//
+// 01 02 03
+// 04 05 06
+// 07 08 09
