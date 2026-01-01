@@ -62,17 +62,17 @@ funct6 | vm | vs2=0 | rs1 | funct3 | vd | opcode
 
 static inline void vle32_v1() {
     asm volatile (
-        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 10, 0b111, 1))
+        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 5, 0b111, 1))
     );
 }
 static inline void vle32_v2() {
     asm volatile (
-        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 11, 0b111, 2))
+        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 6, 0b111, 2))
     );
 }
 static inline void vse32_v() {
     asm volatile (
-        ASM_CUSTOM(INST_VSTORE(0b000000, 1, 3, 12, 0b111))
+        ASM_CUSTOM(INST_VSTORE(0b000000, 1, 3, 7, 0b111))
     );
 }
 

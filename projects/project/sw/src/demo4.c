@@ -2,35 +2,33 @@
 /* ================== main ================== */
 
 int main() {
-    int16_t a[8] = {1,2,3,4,5,6,7,8};
-    int16_t b[2][8] = {{1,1,1,1,1,1,1,1},
+     int16_t b[2][8] = {{1,1,1,1,1,1,1,1},
                        {2,2,2,2,2,2,2,2}};
+     int16_t a[3][8] = {{1,2,3,4,5,6,7,8},
+                       {2,4,6,8,10,12,14,16},
+                       {3,6,9,12,15,18,21,24}};
+   
     int16_t receive[32] = {0};
-    int16_t c[2] = {0};
+    int16_t c[3][2] = {0};
 
     setvi16(); // e16
 
-    asm volatile("mv a1, %0" :: "r"(a));
-    asm volatile("mv a2, %0" :: "r"(&receive));
+    for(int j=0;j<3;j++){
+        for(int i=0;i<2;i++){
+            asm volatile("mv x6, %0" :: "r"(a[j]));
+            vle32_v2();
+            asm volatile("mv x5, %0" :: "r"(b[i]));
+            vle32_v1();
+            vmul_vv();
+            vmv_v_x();
+            vredsum_vs();
+            asm volatile("mv x7, %0" :: "r"(&receive));
+            vse32_v();
+            c[j][i]=receive[0];
+            printf("c[%d][%d] = %d\n", j, i, c[j][i]);
 
-    vle32_v2();
-    for(int i=0;i<2;i++){
-        asm volatile("mv a0, %0" :: "r"(b[i]));
-        vle32_v1();
-        vmul_vv();
-        vmv_v_x();
-        vredsum_vs();
-        vse32_v();
-        c[i]=receive[0];
+        }
     }
-   
-    printf("a addr = %p\n", a);
-    printf("b addr = %p\n", b);
-    printf("c addr = %p\n", &c);
-    for(int i = 0; i < 2; i++) {
-        printf("c[%d] = %d\n", i, c[i]);
-    }
-
     
     return 0;
 }
