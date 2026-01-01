@@ -7,9 +7,10 @@
 #include "libnn/hal_nn.h"
 
 // 定义矩阵维度: C(M x N) = A(M x K) * B(K x N)
-#define M_DIM 8
-#define K_DIM 8
-#define N_DIM 8
+#define NN 8
+#define M_DIM NN
+#define K_DIM NN
+#define N_DIM NN
 
 _Alignas(16) int32_t src_a[M_DIM * K_DIM];
 _Alignas(16) int32_t src_b[K_DIM * N_DIM];
@@ -19,9 +20,9 @@ _Alignas(16) int32_t dst_hard[M_DIM * N_DIM];
 void matmul_hardware_custom(int32_t *A, int32_t *B, int32_t *C, int M, int K, int N) {
     matrix_set_w(M, K);
     matrix_set_x(K, N);
-    _Alignas(16) int32_t temp_X[M_DIM * K_DIM];
-    helper_matrix_T(B, temp_X, K, N);
-    matrix_addr(A, temp_X);
+    _Alignas(16) int32_t temp_A[M_DIM * K_DIM];
+    helper_matrix_T(A, temp_A, K, N);
+    matrix_addr(temp_A, B);
     matrix_cal(C);
 }
 
@@ -50,7 +51,7 @@ int main() {
 
     // 硬件计算 (DUT)
     printf("Running Hardware Acceleration...\n");
-    matmul_hardware_custom(src_a, src_b, dst_soft, M_DIM, K_DIM, N_DIM);
+    matmul_hardware_custom(src_a, src_b, dst_hard, M_DIM, K_DIM, N_DIM);
 
     // 结果验证
     printf("Verifying Results...\n");

@@ -17,8 +17,8 @@ module accelerator (
   assign rs2 = inst[24:20];
 
   wire inst_maxpool;
-  wire inst_matrix_set_w;
-  wire inst_matrix_set_x;
+  wire inst_matrix_set_a;
+  wire inst_matrix_set_b;
   wire inst_matrix_addr;
   wire inst_matrix_cal;
 
@@ -35,12 +35,11 @@ module accelerator (
   wire [511:0] maxpool_wdata;
 
   // 矩阵计算相关控制信号
-  wire xw_buffer_read;
   wire matrix_cal_ok; //计算完成信号
 
   assign inst_maxpool      = (opcode == 7'b1111011) && (fun3 == 3'b000);
-  assign inst_matrix_set_w = (opcode == 7'b1111011) && (fun3 == 3'b011);
-  assign inst_matrix_set_x = (opcode == 7'b1111011) && (fun3 == 3'b100);
+  assign inst_matrix_set_a = (opcode == 7'b1111011) && (fun3 == 3'b011);
+  assign inst_matrix_set_b = (opcode == 7'b1111011) && (fun3 == 3'b100);
   assign inst_matrix_addr  = (opcode == 7'b1111011) && (fun3 == 3'b101);
   assign inst_matrix_cal   = (opcode == 7'b1111011) && (fun3 == 3'b110);
 
@@ -110,15 +109,15 @@ module accelerator (
   );
 
   // ===========================================================
-  // 矩阵乘法 Unit
+  // 矩阵乘法 Unit A*B
   // 目前得保证base地址低三位都是0,因为暂时不太好做处理
   // ===========================================================
-  reg [63:0] x_width;
-  reg [63:0] x_height;
-  reg [63:0] w_width;
-  reg [63:0] w_height; //equal to x_width
-  reg [63:0] x_base;
-  reg [63:0] w_base;
+  reg [63:0] a_width;
+  reg [63:0] a_height;
+  reg [63:0] b_width;
+  reg [63:0] b_height; //equal to a_width
+  reg [63:0] a_base;
+  reg [63:0] b_base;
   reg [63:0] y_base;
   wire buffer_ren;
   wire y_wen;
@@ -126,88 +125,138 @@ module accelerator (
   wire [63:0] y_waddr;
   wire [31:0] y_waddr_offset;
   reg [511:0] y_wmask;
+  reg [511:0] y_wmask_accurate;
 
-  wire [511:0] x_buffer;
-  wire [511:0] w_buffer;
+  wire [511:0] a_buffer;
+  wire [511:0] b_buffer;
   reg [511:0] y_buffer;
 
   assign pc_stall = inst_matrix_cal ? !matrix_cal_ok : 0;
 
   always @(posedge clk) begin
     if (rst) begin
-      x_height <= 0;
-      x_width  <= 0;
-      w_height <= 0;
-      w_width  <= 0;
-      x_base   <= 0;
-      w_base   <= 0;
+      a_height <= 0;
+      a_width  <= 0;
+      b_height <= 0;
+      b_width  <= 0;
+      a_base   <= 0;
+      b_base   <= 0;
       y_base   <= 0;
     end else begin
-      if (inst_matrix_set_x) begin
-        x_height <= rs1_data;
-        x_width <= rs2_data;
-      end else if (inst_matrix_set_w) begin
-        w_height <= rs1_data;
-        w_width <= rs2_data;
+      if (inst_matrix_set_a) begin
+        a_height <= rs1_data;
+        a_width <= rs2_data;
+      end else if (inst_matrix_set_b) begin
+        b_height <= rs1_data;
+        b_width <= rs2_data;
       end else if (inst_matrix_addr) begin
-        x_base <= rs2_data;
-        w_base <= rs1_data;
+        a_base <= rs1_data;
+        b_base <= rs2_data;
       end else if (inst_matrix_cal) begin
         y_base <= rs1_data;
       end else begin
-        x_height <= x_height;
-        x_width  <= x_width ;
-        w_height <= w_height;
-        w_width  <= w_width ;
-        x_base   <= x_base  ;
-        w_base   <= w_base  ;
+        a_height <= a_height;
+        a_width  <= a_width ;
+        b_height <= b_height;
+        b_width  <= b_width ;
+        a_base   <= a_base  ;
+        b_base   <= b_base  ;
         y_base   <= y_base  ;
       end
     end
   end
-  // assign x_height = inst_matrix_set_x ? rs1_data : 0;
-  // assign x_width  = inst_matrix_set_x ? rs2_data : 0;
-  // assign w_height = inst_matrix_set_w ? rs1_data : 0;
-  // assign w_width  = inst_matrix_set_w ? rs2_data : 0;
-  // assign x_base   = inst_matrix_addr ? rs2_data : 0;
-  // assign w_base   = inst_matrix_addr ? rs1_data : 0;
-  // assign y_base   = inst_matrix_cal ? rs1_data : 0;
 
-  assign y_waddr = y_base + {32'b0, y_waddr_offset};
+  assign y_waddr = y_base + ((y_waddr_offset*b_width)<<2);
+
+  always @(*) begin
+    case (b_width[3:0])
+      4'b0000: begin
+        y_wmask = 512'b0;
+      end
+      4'b0001: begin
+        y_wmask = {{480{1'b0}},{32{1'b1}}};
+      end
+      4'b0010: begin
+        y_wmask = {{448{1'b0}},{64{1'b1}}};
+      end
+      4'b0011: begin
+        y_wmask = {{416{1'b0}},{96{1'b1}}};
+      end
+      4'b0100: begin
+        y_wmask = {{384{1'b0}},{128{1'b1}}};
+      end
+      4'b0101: begin
+        y_wmask = {{352{1'b0}},{160{1'b1}}};
+      end
+      4'b0110: begin
+        y_wmask = {{320{1'b0}},{192{1'b1}}};
+      end
+      4'b0111: begin
+        y_wmask = {{288{1'b0}}, {224{1'b1}}};
+      end
+      4'b1000: begin // 8 * 32 = 256 bits
+        y_wmask = {{256{1'b0}}, {256{1'b1}}};
+      end
+      4'b1001: begin // 9 * 32 = 288 bits
+        y_wmask = {{224{1'b0}}, {288{1'b1}}};
+      end
+      4'b1010: begin // 10 * 32 = 320 bits
+        y_wmask = {{192{1'b0}}, {320{1'b1}}};
+      end
+      4'b1011: begin // 11 * 32 = 352 bits
+        y_wmask = {{160{1'b0}}, {352{1'b1}}};
+      end
+      4'b1100: begin // 12 * 32 = 384 bits
+        y_wmask = {{128{1'b0}}, {384{1'b1}}};
+      end
+      4'b1101: begin // 13 * 32 = 416 bits
+        y_wmask = {{96{1'b0}}, {416{1'b1}}};
+      end
+      4'b1110: begin // 14 * 32 = 448 bits
+        y_wmask = {{64{1'b0}}, {448{1'b1}}};
+      end
+      4'b1111: begin // 15 * 32 = 480 bits
+        y_wmask = {{32{1'b0}}, {480{1'b1}}};
+      end
+      default: begin
+        y_wmask = 512'b0;
+      end
+    endcase
+  end
 
   always @(*) begin
     case (y_waddr[2])
       1'b0: begin
         y_buffer = y_wdata;
-        y_wmask = {512{1'b1}};
+        y_wmask_accurate = y_wmask;
       end
       1'b1: begin
         y_buffer = y_wdata << 32;
-        y_wmask = {{480{1'b1}}, {32'b0}};
+        y_wmask_accurate = y_wmask << 32;
       end
     endcase
   end
 
 
-  ram_buffer XY_BUFFER(
+  ram_buffer AY_BUFFER(
       .clk  (clk),
-      .xw_width(x_width),
+      .ab_width(a_width),
       .ren  (buffer_ren),
-      .read_times(x_width[3:0]),
-      .rIdx ((x_base - `PC_START) >> 2),
-      .rdata(x_buffer),
+      .read_times(a_width[3:0]),
+      .rIdx ((a_base - `PC_START) >> 2),
+      .rdata(a_buffer),
       .wIdx ((y_waddr - `PC_START) >> 3),
       .wdata(y_buffer),
-      .wmask(y_wmask),
+      .wmask(y_wmask_accurate),
       .wen  (y_wen)
   );
-  ram_buffer W_BUFFER(
+  ram_buffer B_BUFFER(
       .clk  (clk),
-      .xw_width(w_width),
+      .ab_width(b_width),
       .ren  (buffer_ren),
-      .read_times(w_width[3:0]),
-      .rIdx ((w_base - `PC_START) >> 2),
-      .rdata(w_buffer),
+      .read_times(b_width[3:0]),
+      .rIdx ((b_base - `PC_START) >> 2),
+      .rdata(b_buffer),
       .wIdx (),
       .wdata(),
       .wmask(),
@@ -218,11 +267,11 @@ module accelerator (
   systolic_array MATRIX_CAL (
     .clk (clk),
     .rst_n(inst_matrix_cal), //start, inst_matrix_cal
-    .M(x_height[31:0]),
-    .N(x_width[31:0]),
-    .K(w_width[31:0]),
-    .X(x_buffer),
-    .W(w_buffer),
+    .M(a_height[31:0]),
+    .N(a_width[31:0]),
+    .K(b_width[31:0]),
+    .X(a_buffer),
+    .W(b_buffer),
     .Y(y_wdata),
     .buffer_ren(buffer_ren),
     .mem_w_en(y_wen),
