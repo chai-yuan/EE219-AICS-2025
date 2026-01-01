@@ -1,4 +1,5 @@
-#include "rvv.h"
+#include "libnn/rv_vector_ext.h"
+#include "trap.h"
 /* ================== main ================== */
 
 int main() {

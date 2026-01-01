@@ -1,267 +1,123 @@
 #ifndef CUSTOM_RVV_H
 #define CUSTOM_RVV_H
 
+/* ================= 基础宏 ================= */
+
+#define STR2(s)             #s
+#define STR(s)              STR2(s)
+
+#define INST_OPV_BIN(funct6, vm, vs2, vs1, funct3, vd, opcode) 0b##funct6##vm##vs2##vs1##funct3##vd##opcode
+#define WORD(inst) ".word "#inst""
+#define ASM_CUSTOM(inst) WORD(inst)
+
+/* ============ OP-V (vv / vs) ============ */
 /*
- * Custom RISC-V Vector Extension Header
- * Based on provided README.md specifications.
- * VLEN=512, SEW=64
- */
+31    26 25 24   20 19   15 14  12 11    7 6      0
+funct6 vm  vs2     vs1     funct3  vd     opcode
+*/
+#define INST_OPV(funct6, vm, vs2, vs1, funct3, vd, opcode) ( \
+    (((funct6) & 0x3F) << 26) | \
+    (((vm)     & 0x01) << 25) | \
+    (((vs2)    & 0x1F) << 20) | \
+    (((vs1)    & 0x1F) << 15) | \
+    (((funct3) & 0x07) << 12) | \
+    (((vd)     & 0x1F) << 7 ) | \
+    ((opcode)  & 0x7F) \
+)
 
-// Helper macros for assembly string construction
-#define STR2(s) #s
-#define STR(s) STR2(s)
-
-// Opcode Definitions
-#define OP_LOAD  0x07
-#define OP_STORE 0x27
-#define OP_V     0x57
-
+/* ============ OPIVX (vmv.v.x) ============ */
 /*
- * Helper for calculating func7 based on func6 and vm=1
- * format: (func6 << 1) | 1
- */
+funct6 | vm | vs2=0 | rs1 | funct3 | vd | opcode
+*/
+#define INST_OPIVX(funct6, vm, rs1, funct3, vd, opcode) ( \
+    (((funct6) & 0x3F) << 26) | \
+    (((vm)     & 0x01) << 25) | \
+    (0                << 20) | \
+    (((rs1)    & 0x1F) << 15) | \
+    (((funct3) & 0x07) << 12) | \
+    (((vd)     & 0x1F) << 7 ) | \
+    ((opcode)  & 0x7F) \
+)
 
-// ==========================================
-// LOAD / STORE Instructions
-// ==========================================
+/* ============ VLOAD / VSTORE ============ */
 
-/* vle64.v vd, rs1, vm */
-/* Implementation: vd = Mem[x[rs1]] */
-/* func6: 000000 -> func7: 0x01, func3: 111 (0x7), Op: 0x07 */
-static inline void vle64_v(register int* vd, register int* rs1) {
-    asm volatile(
-        ".insn r %0, %1, %2, %3, %4, x0"
-        :
-        : "i"(OP_LOAD), "i"(0x7), "i"(0x01), "r"(vd), "r"(rs1)
-        : "memory"
+#define INST_VLOAD(funct6, vm, rs1, funct3, vd) ( \
+    (((funct6) & 0x3F) << 26) | \
+    (((vm)     & 0x01) << 25) | \
+    (((rs1)    & 0x1F) << 15) | \
+    (((funct3) & 0x07) << 12) | \
+    (((vd)     & 0x1F) << 7 ) | \
+    0x07 \
+)
+
+#define INST_VSTORE(funct6, vm, vs3, rs1, funct3) ( \
+    (((funct6) & 0x3F) << 26) | \
+    (((vm)     & 0x01) << 25) | \
+    (((vs3)    & 0x1F) << 7) | \
+    (((rs1)    & 0x1F) << 15) | \
+    (((funct3) & 0x07) << 12) | \
+    0x27 \
+)
+
+/* ============ 指令封装 ============ */
+
+static inline void vle32_v1() {
+    asm volatile (
+        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 10, 0b111, 1))
+    );
+}
+static inline void vle32_v2() {
+    asm volatile (
+        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 11, 0b111, 2))
+    );
+}
+static inline void vse32_v() {
+    asm volatile (
+        ASM_CUSTOM(INST_VSTORE(0b000000, 1, 3, 12, 0b111))
     );
 }
 
-/* vse64.v vs3, rs1, vm */
-/* Implementation: Mem[x[rs1]] = vs3 */
-/* func6: 000000 -> func7: 0x01, func3: 111 (0x7), Op: 0x27 */
-static inline void vse64_v(register int* vs3, register int* rs1) {
-    asm volatile(
-        ".insn r %0, %1, %2, %3, %4, x0"
-        :
-        : "i"(OP_STORE), "i"(0x7), "i"(0x01), "r"(vs3), "r"(rs1)
-        : "memory"
+static inline void vmul_vv() {
+    asm volatile (
+        ASM_CUSTOM(INST_OPV(0b100101, 1, 1, 2, 0b010, 3, 0x57))
     );
 }
 
-// ==========================================
-// Arithmetic Instructions (OPIVV, OPIVX, OPIVI)
-// ==========================================
-
-/* vadd.vv vd, vs2, vs1, vm */
-/* func6: 000000 -> func7: 0x01, func3: 000 */
-static inline void vadd_vv(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x0, 0x01, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
+static inline void vredsum_vs() {
+    asm volatile (
+        ASM_CUSTOM(INST_OPV(0b000000, 1, 3, 0, 0b010, 3, 0x57))
     );
 }
 
-/* vadd.vx vd, vs2, rs1, vm */
-/* func6: 000000 -> func7: 0x01, func3: 100 (0x4) */
-static inline void vadd_vx(register int* vd, register int* rs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x4, 0x01, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1), "r"(vs2)
+static inline void vmv_v_x() {
+    asm volatile (
+        ASM_CUSTOM(INST_OPIVX(0b010111, 1, 0, 0b100, 0, 0x57))
     );
 }
 
-/* vadd.vi vd, vs2, imm, vm */
-/* func6: 000000 -> func7: 0x01, func3: 011 (0x3) */
-/* Note: imm is passed in rs1 slot of .insn r format */
-static inline void vadd_vi(register int* vd, register int imm, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x3, 0x01, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(imm), "r"(vs2)
+/* ============ setvi (只传 sew) ============ */
+/*
+vsetivli x0, imm, eSEW,m1
+*/
+#define INST_SETVI(sew) ( \
+    ((sew & 0x7) << 26) | \
+    (0b111 << 12) | \
+    0x57 \
+)
+
+static inline void setvi8() {
+    asm volatile (
+        ASM_CUSTOM(INST_SETVI(0))
     );
 }
-
-/* vsub.vv vd, vs2, vs1, vm */
-/* func6: 000010 (0x02) -> func7: 0x05, func3: 000 */
-static inline void vsub_vv(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x0, 0x05, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
+static inline void setvi16() {
+    asm volatile (
+        ASM_CUSTOM(INST_SETVI(1))
     );
 }
-
-/* vsub.vx vd, vs2, rs1, vm */
-/* func6: 000010 (0x02) -> func7: 0x05, func3: 100 (0x4) */
-static inline void vsub_vx(register int* vd, register int* rs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x4, 0x05, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1), "r"(vs2)
-    );
-}
-
-// ==========================================
-// Multiply / Divide (OPMVV, OPMVX)
-// ==========================================
-
-/* vmul.vv vd, vs2, vs1, vm */
-/* func6: 100101 (0x25) -> func7: 0x4B, func3: 010 (0x2) */
-static inline void vmul_vv(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x2, 0x4B, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
-    );
-}
-
-/* vmul.vx vd, vs2, rs1, vm */
-/* func6: 100101 (0x25) -> func7: 0x4B, func3: 110 (0x6) */
-static inline void vmul_vx(register int* vd, register int* rs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x6, 0x4B, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1), "r"(vs2)
-    );
-}
-
-/* vdiv.vv vd, vs2, vs1, vm */
-/* func6: 100001 (0x21) -> func7: 0x43, func3: 010 (0x2) */
-static inline void vdiv_vv(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x2, 0x43, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
-    );
-}
-
-/* vdiv.vx vd, vs2, rs1, vm */
-/* func6: 100001 (0x21) -> func7: 0x43, func3: 110 (0x6) */
-static inline void vdiv_vx(register int* vd, register int* rs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x6, 0x43, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1), "r"(vs2)
-    );
-}
-
-// ==========================================
-// Move Instructions
-// ==========================================
-
-/* vmv.v.x vd, rs1, vm */
-/* func6: 010111 (0x17) -> func7: 0x2F, func3: 100 (0x4) */
-/* Hint: Set vid_wb_from_rs1 to 1 */
-static inline void vmv_v_x(register int* vd, register int* rs1) {
-    asm volatile(
-        ".insn r %0, 0x4, 0x2F, %1, %2, x0"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1)
-    );
-}
-
-// ==========================================
-// Min / Max Instructions
-// ==========================================
-
-/* vmin.vv vd, vs2, vs1, vm */
-/* func6: 000101 (0x05) -> func7: 0x0B, func3: 000 */
-static inline void vmin_vv(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x0, 0x0B, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
-    );
-}
-
-/* vmin.vx vd, vs2, rs1, vm */
-/* func6: 000101 (0x05) -> func7: 0x0B, func3: 100 (0x4) */
-static inline void vmin_vx(register int* vd, register int* rs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x4, 0x0B, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1), "r"(vs2)
-    );
-}
-
-/* vmax.vv vd, vs2, vs1, vm */
-/* func6: 000111 (0x07) -> func7: 0x0F, func3: 000 */
-static inline void vmax_vv(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x0, 0x0F, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
-    );
-}
-
-/* vmax.vx vd, vs2, rs1, vm */
-/* func6: 000111 (0x07) -> func7: 0x0F, func3: 100 (0x4) */
-static inline void vmax_vx(register int* vd, register int* rs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x4, 0x0F, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1), "r"(vs2)
-    );
-}
-
-// ==========================================
-// Shift Instructions (VSRA)
-// ==========================================
-
-/* vsra.vv vd, vs2, vs1, vm */
-/* func6: 101001 (0x29) -> func7: 0x53, func3: 000 */
-static inline void vsra_vv(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x0, 0x53, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
-    );
-}
-
-/* vsra.vx vd, vs2, rs1, vm */
-/* func6: 101001 (0x29) -> func7: 0x53, func3: 100 (0x4) */
-static inline void vsra_vx(register int* vd, register int* rs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x4, 0x53, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(rs1), "r"(vs2)
-    );
-}
-
-/* vsra.vi vd, vs2, uimm, vm */
-/* func6: 101001 (0x29) -> func7: 0x53, func3: 011 (0x3) */
-static inline void vsra_vi(register int* vd, register int uimm, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x3, 0x53, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(uimm), "r"(vs2)
-    );
-}
-
-// ==========================================
-// Reduction Instructions (OPMVV)
-// ==========================================
-
-/* vredsum.vs vd, vs2, vs1, vm */
-/* func6: 000000 -> func7: 0x01, func3: 010 (0x2) */
-static inline void vredsum_vs(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x2, 0x01, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
-    );
-}
-
-/* vredmax.vs vd, vs2, vs1, vm */
-/* func6: 000111 (0x07) -> func7: 0x0F, func3: 010 (0x2) */
-static inline void vredmax_vs(register int* vd, register int* vs1, register int* vs2) {
-    asm volatile(
-        ".insn r %0, 0x2, 0x0F, %1, %2, %3"
-        :
-        : "i"(OP_V), "r"(vd), "r"(vs1), "r"(vs2)
+static inline void setvi32() {
+    asm volatile (
+        ASM_CUSTOM(INST_SETVI(2))
     );
 }
 
