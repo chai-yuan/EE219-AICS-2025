@@ -240,7 +240,7 @@ module accelerator (
 
   ram_buffer AY_BUFFER(
       .clk  (clk),
-      .ab_width(a_width),
+      .ab_width(a_height),
       .ren  (buffer_ren),
       .read_times(a_width[3:0]),
       .rIdx ((a_base - `PC_START) >> 2),
@@ -254,7 +254,7 @@ module accelerator (
       .clk  (clk),
       .ab_width(b_width),
       .ren  (buffer_ren),
-      .read_times(b_width[3:0]),
+      .read_times(b_height[3:0]),
       .rIdx ((b_base - `PC_START) >> 2),
       .rdata(b_buffer),
       .wIdx (),
