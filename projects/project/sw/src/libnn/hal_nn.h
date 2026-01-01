@@ -49,6 +49,23 @@ void hal_fc_i32_i32_bias(const int32_t *input, const int32_t *weight, const int3
 // Softmax: Input(int32) -> LUT -> Output(int32)
 void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, int size, int lut_size);
 
+// 32位矩阵乘法
+void hal_matmul_i32(const int32_t *A, const int32_t *B, int32_t *C, int M, int K, int N);
+
+// 矩阵辅助函数
+
+// 矩阵转置
+static inline void helper_matrix_T(const int32_t *src, int32_t *dst, int h, int w) {
+    if (src == NULL || dst == NULL || h <= 0 || w <= 0) {
+        return;
+    }
+    for (int r = 0; r < h; r++) {
+        for (int c = 0; c < w; c++) {
+            dst[c * h + r] = src[r * w + c];
+        }
+    }
+}
+
 #ifdef HAL_NN_SOFT
 
 void hal_conv2d_i8_i16(const int8_t *input, const int8_t *weight, int16_t *output, const hal_conv_params_t *p) {
@@ -192,6 +209,18 @@ void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, 
         int32_t exp_delta_shr = exp_vals[i] >> SAFE_SHIFT;
         int64_t num           = (int64_t)exp_delta_shr * Q_16;
         output[i]             = (int32_t)(num / exp_sum_shr);
+    }
+}
+
+void hal_matmul_i32(const int32_t *A, const int32_t *B, int32_t *C, int M, int K, int N){
+    for (int i = 0; i < M; i++) {
+        for (int j = 0; j < N; j++) {
+            int32_t sum = 0;
+            for (int k = 0; k < K; k++) {
+                sum += A[i * K + k] * B[k * N + j];
+            }
+            C[i * N + j] = sum;
+        }
     }
 }
 

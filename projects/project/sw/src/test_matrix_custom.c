@@ -7,26 +7,24 @@
 #include "libnn/hal_nn.h"
 
 // 定义矩阵维度: C(M x N) = A(M x K) * B(K x N)
-#define M_DIM 16
-#define K_DIM 20
-#define N_DIM 16
+#define M_DIM 8
+#define K_DIM 8
+#define N_DIM 8
 
-int32_t src_a[M_DIM * K_DIM];
-int32_t src_b[K_DIM * N_DIM];
-int32_t dst_soft[M_DIM * N_DIM];
-int32_t dst_hard[M_DIM * N_DIM];
+typedef int32_t i32_128 __attribute__((aligned(16)));
 
-// 简单的 O(N^3) 矩阵乘法
-void matmul_software_ref(int32_t *A, int32_t *B, int32_t *C, int M, int K, int N) {
-    for (int i = 0; i < M; i++) {
-        for (int j = 0; j < N; j++) {
-            int32_t sum = 0;
-            for (int k = 0; k < K; k++) {
-                sum += A[i * K + k] * B[k * N + j];
-            }
-            C[i * N + j] = sum;
-        }
-    }
+i32_128 src_a[M_DIM * K_DIM];
+i32_128 src_b[K_DIM * N_DIM];
+i32_128 dst_soft[M_DIM * N_DIM];
+i32_128 dst_hard[M_DIM * N_DIM];
+
+void matmul_hardware_custom(int32_t *A, int32_t *B, int32_t *C, int M, int K, int N) {
+    matrix_set_w(M, K);
+    matrix_set_x(K, N);
+    i32_128 temp_X[M_DIM * K_DIM];
+    helper_matrix_T(B, temp_X, K, N);
+    matrix_addr(A, temp_X);
+    matrix_cal(C);
 }
 
 void init_data() {
@@ -50,14 +48,11 @@ int main() {
 
     // 软件实现计算 (Reference)
     printf("Running Software Reference...\n");
-    matmul_software_ref(src_a, src_b, dst_soft, M_DIM, K_DIM, N_DIM);
+    hal_matmul_i32(src_a, src_b, dst_soft, M_DIM, K_DIM, N_DIM);
 
     // 硬件计算 (DUT)
     printf("Running Hardware Acceleration...\n");
-    matrix_set_w(M_DIM, K_DIM);
-    matrix_set_x(K_DIM, N_DIM);
-    matrix_addr(src_a, src_b);
-    matrix_cal(dst_hard);
+    matmul_hardware_custom(src_a, src_b, dst_soft, M_DIM, K_DIM, N_DIM);
 
     // 结果验证
     printf("Verifying Results...\n");
