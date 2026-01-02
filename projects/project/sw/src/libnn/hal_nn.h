@@ -90,6 +90,63 @@ static inline void load_tile_8x8(const int32_t *src, int32_t *dst, int rows, int
     }
 }
 
+static inline void load_tile_i16_to_i32(const int16_t *src, int32_t *dst, int rows, int cols, int start_row,
+                                        int start_col) {
+    for (int i = 0; i < HARDWARE_SIZE; i++) {
+        int r = start_row + i;
+        for (int j = 0; j < HARDWARE_SIZE; j++) {
+            int dst_idx = i * HARDWARE_SIZE + j;
+            if (r < rows && j + start_col < cols) {
+                int src_idx = r * cols + (start_col + j);
+                // 关键点：类型提升 (Casting)
+                dst[dst_idx] = (int32_t)src[src_idx];
+            } else {
+                dst[dst_idx] = 0; // Padding
+            }
+        }
+    }
+}
+
+static inline void load_tile_i8_to_i32(const int8_t *src, int32_t *dst, int rows, int cols, int start_row,
+                                       int start_col) {
+    for (int i = 0; i < HARDWARE_SIZE; i++) {
+        int r = start_row + i;
+        for (int j = 0; j < HARDWARE_SIZE; j++) {
+            int dst_idx = i * HARDWARE_SIZE + j;
+            if (r < rows && j + start_col < cols) {
+                int src_idx = r * cols + (start_col + j);
+                // 关键点：类型提升 (Casting)，保留符号位
+                dst[dst_idx] = (int32_t)src[src_idx];
+            } else {
+                dst[dst_idx] = 0; // Padding
+            }
+        }
+    }
+}
+
+static inline void store_tile_i32_to_i16(const int32_t *src, int16_t *dst, int rows, int cols, int start_row,
+                                         int start_col) {
+    for (int i = 0; i < HARDWARE_SIZE; i++) {
+        int r = start_row + i;
+        if (r >= rows)
+            continue;
+        for (int j = 0; j < HARDWARE_SIZE; j++) {
+            int c = start_col + j;
+            if (c >= cols)
+                continue;
+
+            int32_t val = src[i * HARDWARE_SIZE + j];
+
+            if (val > 32767)
+                val = 32767;
+            else if (val < -32768)
+                val = -32768;
+
+            dst[r * cols + c] = (int16_t)val;
+        }
+    }
+}
+
 // 将 8x8 buffer 中的结果写回大矩阵
 static inline void store_tile_8x8(const int32_t *src, int32_t *dst, int rows, int cols, int start_row, int start_col) {
     for (int i = 0; i < HARDWARE_SIZE; i++) {
@@ -137,9 +194,61 @@ static inline void helper_matmul_i32(int32_t *A, int32_t *B, int32_t *C, int M, 
     }
 }
 
-static inline void helper_matmul_i16_i32(int16_t *A, int16_t *B, int32_t *C, int M, int K, int N) {}
+static inline void helper_matmul_i16_i32(int16_t *A, int16_t *B, int32_t *C, int M, int K, int N) {
+    int32_t tile_A[BLOCK_ELEM_COUNT];
+    int32_t tile_B[BLOCK_ELEM_COUNT];
+    int32_t tile_C_hw[BLOCK_ELEM_COUNT];
+    int32_t tile_C_accum[BLOCK_ELEM_COUNT];
 
-static inline void helper_matmul_i8_i16(int8_t *A, int8_t *B, int16_t *C, int M, int K, int N) {}
+    for (int m = 0; m < M; m += HARDWARE_SIZE) {
+        for (int n = 0; n < N; n += HARDWARE_SIZE) {
+
+            memset(tile_C_accum, 0, sizeof(tile_C_accum));
+
+            for (int k = 0; k < K; k += HARDWARE_SIZE) {
+                load_tile_i16_to_i32(A, tile_A, M, K, m, k);
+
+                load_tile_i16_to_i32(B, tile_B, K, N, k, n);
+
+                matmul_i32_8x8(tile_A, tile_B, tile_C_hw);
+
+                for (int i = 0; i < BLOCK_ELEM_COUNT; i++) {
+                    tile_C_accum[i] += tile_C_hw[i];
+                }
+            }
+
+            store_tile_8x8(tile_C_accum, C, M, N, m, n);
+        }
+    }
+}
+
+static inline void helper_matmul_i8_i16(int8_t *A, int8_t *B, int16_t *C, int M, int K, int N) {
+    int32_t tile_A[BLOCK_ELEM_COUNT];
+    int32_t tile_B[BLOCK_ELEM_COUNT];
+    int32_t tile_C_hw[BLOCK_ELEM_COUNT];
+    int32_t tile_C_accum[BLOCK_ELEM_COUNT];
+
+    for (int m = 0; m < M; m += HARDWARE_SIZE) {
+        for (int n = 0; n < N; n += HARDWARE_SIZE) {
+
+            memset(tile_C_accum, 0, sizeof(tile_C_accum));
+
+            for (int k = 0; k < K; k += HARDWARE_SIZE) {
+                load_tile_i8_to_i32(A, tile_A, M, K, m, k);
+
+                load_tile_i8_to_i32(B, tile_B, K, N, k, n);
+
+                matmul_i32_8x8(tile_A, tile_B, tile_C_hw);
+
+                for (int i = 0; i < BLOCK_ELEM_COUNT; i++) {
+                    tile_C_accum[i] += tile_C_hw[i];
+                }
+            }
+
+            store_tile_i32_to_i16(tile_C_accum, C, M, N, m, n);
+        }
+    }
+}
 
 #ifdef HAL_NN_SOFT
 
@@ -207,17 +316,23 @@ void hal_maxpool_2x2_i16(const int16_t *input, int16_t *output, int input_c, int
 
 // FC1: MatMul -> ReLU -> Scale
 void hal_fc_i16_i32_relu_scale(const int16_t *input, const int16_t *weight, int32_t *output, const hal_fc_params_t *p) {
-    for (int i = 0; i < p->out_features; i++) {
-        int32_t acc = 0;
-        for (int j = 0; j < p->in_features; j++) {
-            // weight shape: [Out, In]
-            acc += (int32_t)input[j] * weight[i * p->in_features + j];
+    int M = p->out_features;
+    int K = p->in_features;
+    int N = 1;
+
+    helper_matmul_i16_i32((int16_t *)weight, (int16_t *)input, output, M, K, N);
+
+    for (int i = 0; i < M; i++) {
+        int32_t acc = output[i];
+
+        if (acc < 0) {
+            acc = 0;
         }
 
-        if (acc < 0)
-            acc = 0; // ReLU
+        if (p->scale != 0) {
+            acc = acc / p->scale;
+        }
 
-        acc = acc / p->scale;
         acc = CLAMP(acc, 0, 32768);
 
         output[i] = acc;
@@ -383,17 +498,23 @@ void hal_maxpool_2x2_i16(const int16_t *input, int16_t *output, int input_c, int
 
 // FC1: MatMul -> ReLU -> Scale
 void hal_fc_i16_i32_relu_scale(const int16_t *input, const int16_t *weight, int32_t *output, const hal_fc_params_t *p) {
-    for (int i = 0; i < p->out_features; i++) {
-        int32_t acc = 0;
-        for (int j = 0; j < p->in_features; j++) {
-            // weight shape: [Out, In]
-            acc += (int32_t)input[j] * weight[i * p->in_features + j];
+    int M = p->out_features;
+    int K = p->in_features;
+    int N = 1;
+
+    helper_matmul_i16_i32((int16_t *)weight, (int16_t *)input, output, M, K, N);
+
+    for (int i = 0; i < M; i++) {
+        int32_t acc = output[i];
+
+        if (acc < 0) {
+            acc = 0;
         }
 
-        if (acc < 0)
-            acc = 0; // ReLU
+        if (p->scale != 0) {
+            acc = acc / p->scale;
+        }
 
-        acc = acc / p->scale;
         acc = CLAMP(acc, 0, 32768);
 
         output[i] = acc;
@@ -545,17 +666,23 @@ void hal_maxpool_2x2_i16(const int16_t *input, int16_t *output, int input_c, int
 
 // FC1: MatMul -> ReLU -> Scale
 void hal_fc_i16_i32_relu_scale(const int16_t *input, const int16_t *weight, int32_t *output, const hal_fc_params_t *p) {
-    for (int i = 0; i < p->out_features; i++) {
-        int32_t acc = 0;
-        for (int j = 0; j < p->in_features; j++) {
-            // weight shape: [Out, In]
-            acc += (int32_t)input[j] * weight[i * p->in_features + j];
+    int M = p->out_features;
+    int K = p->in_features;
+    int N = 1;
+
+    helper_matmul_i16_i32((int16_t *)weight, (int16_t *)input, output, M, K, N);
+
+    for (int i = 0; i < M; i++) {
+        int32_t acc = output[i];
+
+        if (acc < 0) {
+            acc = 0;
         }
 
-        if (acc < 0)
-            acc = 0; // ReLU
+        if (p->scale != 0) {
+            acc = acc / p->scale;
+        }
 
-        acc = acc / p->scale;
         acc = CLAMP(acc, 0, 32768);
 
         output[i] = acc;
@@ -773,7 +900,7 @@ void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, 
     }
 }
 
-static inline void matmul_i32_8x8(int32_t *A, int32_t *B, int32_t *C){}
+static inline void matmul_i32_8x8(int32_t *A, int32_t *B, int32_t *C) {}
 
 #endif
 
