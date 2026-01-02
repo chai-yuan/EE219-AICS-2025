@@ -75,8 +75,7 @@ void run_network(ModelWeights *weights, FeatureMaps *buffers) {
     hal_fc_i16_i32_relu_scale(buffers->pool_out, weights->fc1_weights, buffers->fc1_out, &fc_params);
 
     printf("Running FC2...\n");
-    hal_fc_i32_i32_bias(buffers->fc1_out, weights->fc2_weights, weights->fc2_bias, buffers->fc2_out, FC2_IN_SIZE,
-                        FC2_OUT_SIZE);
+    hal_fc_i32_i32_bias(buffers->fc1_out, weights->fc2_weights, weights->fc2_bias, buffers->fc2_out);
 
     printf("Running Softmax HW...\n");
     hal_softmax_i32(buffers->fc2_out, weights->softmax_lut, buffers->softmax_out, FC2_OUT_SIZE, LUT_SIZE);
