@@ -7,21 +7,20 @@
 #include "libnn/hal_nn.h"
 
 // 定义矩阵维度: C(M x N) = A(M x K) * B(K x N)
-#define NN 8
-#define M_DIM NN
-#define K_DIM NN
-#define N_DIM NN
+#define M_DIM 5
+#define K_DIM 12
+#define N_DIM 9
 
 _Alignas(16) int32_t src_a[M_DIM * K_DIM];
 _Alignas(16) int32_t src_b[K_DIM * N_DIM];
 _Alignas(16) int32_t dst_soft[M_DIM * N_DIM];
 _Alignas(16) int32_t dst_hard[M_DIM * N_DIM];
+_Alignas(16) int32_t temp_A[M_DIM * K_DIM];
 
 void matmul_hardware_custom(int32_t *A, int32_t *B, int32_t *C, int M, int K, int N) {
     matrix_set_a(M, K);
     matrix_set_b(K, N);
-    _Alignas(16) int32_t temp_A[M_DIM * K_DIM];
-    helper_matrix_T(A, temp_A, K, N);
+    helper_matrix_T(A, temp_A, M, K);
     matrix_addr(temp_A, B);
     matrix_cal(C);
 }

@@ -36,10 +36,9 @@ module ram_buffer(
   // x_width 最大是15
   genvar i;
 
-  //TODO: 如下这种,可以将x_width扩大到16,之后在看看
   // for (i=0; i<16; i = i+1) begin : gen_read_block
   //   wire [63:0] full_data;
-  //   assign full_data = ram_read_helper(ren, (read_addr + i*ab_width)>>1);
+  //   assign full_data = ram_read_helper(ren, (read_addr + i)>>1);
   //   assign rdata_t[32*(i+1)-1: 32*i] = ((read_addr + i*ab_width) & 64'b1) == 64'b1 ? full_data[63:32] : full_data[31:0];
   // end
 
@@ -54,3 +53,14 @@ module ram_buffer(
     end
   end
 endmodule 
+
+//  A
+// 1 2 3 4 5
+// 6 7 8 9 10
+// 1 2 3 4 5
+// B:
+// 1 2 3 4
+// 5 1 2 3
+// 4 5 1 2
+// 3 4 5 1
+// 2 3 4 5
