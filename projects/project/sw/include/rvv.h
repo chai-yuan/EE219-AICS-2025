@@ -60,16 +60,13 @@ funct6 | vm | vs2=0 | rs1 | funct3 | vd | opcode
 
 /* ============ 指令封装 ============ */
 
-static inline void vle32_v1() {
-    asm volatile (
-        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 5, 0b111, 1))
-    );
-}
-static inline void vle32_v2() {
-    asm volatile (
-        ASM_CUSTOM(INST_VLOAD(0b000000, 1, 6, 0b111, 2))
-    );
-}
+static inline void custom_vle32_v1(void *rs1) { 
+    asm volatile ( ".insn r 0x07, 0x7, 1, x1, %0, x0" : : "r"(rs1) : "memory" );
+ }
+
+ static inline void custom_vle32_v2(void *rs1) { 
+    asm volatile ( ".insn r 0x07, 0x7, 1, x2, %0, x0" : : "r"(rs1) : "memory" );
+ }
 static inline void vse32_v() {
     asm volatile (
         ASM_CUSTOM(INST_VSTORE(0b000000, 1, 3, 7, 0b111))

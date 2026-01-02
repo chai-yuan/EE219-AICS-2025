@@ -1,6 +1,4 @@
 #include "rvv.h"
-/* ================== main ================== */
-
 int main() {
      int16_t b[2][8] = {{1,1,1,1,1,1,1,1},
                        {2,2,2,2,2,2,2,2}};
@@ -14,11 +12,9 @@ int main() {
     setvi16(); // e16
 
     for(int j=0;j<3;j++){
+        custom_vle32_v1(a[j]);
         for(int i=0;i<2;i++){
-            asm volatile("mv x6, %0" :: "r"(a[j]));
-            vle32_v2();
-            asm volatile("mv x5, %0" :: "r"(b[i]));
-            vle32_v1();
+            custom_vle32_v2(b[i]);
             vmul_vv();
             vmv_v_x();
             vredsum_vs();

@@ -1,0 +1,4 @@
+NAME = demo5
+SRCS = src/demo5.c
+LIBS += klib
+include /home/ubuntu/EE219-AICS-2025/projects/project/sw/libraries/abstract-machine/Makefile
