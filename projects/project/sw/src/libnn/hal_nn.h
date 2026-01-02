@@ -137,11 +137,9 @@ static inline void helper_matmul_i32(int32_t *A, int32_t *B, int32_t *C, int M, 
     }
 }
 
-static inline void helper_matmul_i16_i32(int16_t *A, int16_t *B, int32_t *C, int M, int K, int N) {
-}
+static inline void helper_matmul_i16_i32(int16_t *A, int16_t *B, int32_t *C, int M, int K, int N) {}
 
-static inline void helper_matmul_i8_i16(int8_t *A, int8_t *B, int16_t *C, int M, int K, int N) {
-}
+static inline void helper_matmul_i8_i16(int8_t *A, int8_t *B, int16_t *C, int M, int K, int N) {}
 
 #ifdef HAL_NN_SOFT
 
@@ -403,15 +401,15 @@ void hal_fc_i16_i32_relu_scale(const int16_t *input, const int16_t *weight, int3
 }
 
 // FC2: MatMul -> Add Bias
-void hal_fc_i32_i32_bias(const int32_t *input, const int32_t *weight, const int32_t *bias, int32_t *output,
-                         int in_features, int out_features) {
-    for (int i = 0; i < out_features; i++) {
-        int32_t acc = 0;
-        for (int j = 0; j < in_features; j++) {
-            acc += input[j] * weight[i * in_features + j];
-        }
-        acc += bias[i];
-        output[i] = acc;
+void hal_fc_i32_i32_bias(const int32_t *input, const int32_t *weight, const int32_t *bias, int32_t *output) {
+    int M = FC2_OUT_SIZE;
+    int K = FC2_IN_SIZE;
+    int N = 1;
+
+    helper_matmul_i32((int32_t *)weight, (int32_t *)input, output, M, K, N);
+
+    for (int i = 0; i < FC2_OUT_SIZE; i++) {
+        output[i] += bias[i];
     }
 }
 
@@ -462,6 +460,29 @@ void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, 
         int32_t exp_delta_shr = exp_vals[i] >> SAFE_SHIFT;
         int64_t num           = (int64_t)exp_delta_shr * Q_16;
         output[i]             = (int32_t)(num / exp_sum_shr);
+    }
+}
+
+static inline void matmul_i32_8x8(int32_t *A, int32_t *B, int32_t *C) {
+    int32_t B_T[HARDWARE_SIZE * HARDWARE_SIZE];
+    helper_matrix_T(B, B_T, HARDWARE_SIZE, HARDWARE_SIZE);
+    int32_t receive[32] = {0};
+    setvi32();
+
+    for (int i = 0; i < HARDWARE_SIZE; i++) {
+        custom_vle_v1(&A[i * HARDWARE_SIZE]);
+
+        for (int j = 0; j < HARDWARE_SIZE; j++) {
+            custom_vle_v2(&B_T[j * HARDWARE_SIZE]);
+
+            vmul_vv();
+            vmv_v_x();
+            vredsum_vs();
+
+            custom_vse(receive);
+
+            C[i * HARDWARE_SIZE + j] = receive[0];
+        }
     }
 }
 
@@ -691,12 +712,11 @@ void hal_fc_i16_i32_relu_scale(const int16_t *input, const int16_t *weight, int3
 }
 
 // FC2: MatMul -> Add Bias
-void hal_fc_i32_i32_bias(const int32_t *input, const int32_t *weight, const int32_t *bias, int32_t *output,
-                         int in_features, int out_features) {
-    for (int i = 0; i < out_features; i++) {
+void hal_fc_i32_i32_bias(const int32_t *input, const int32_t *weight, const int32_t *bias, int32_t *output) {
+    for (int i = 0; i < FC2_OUT_SIZE; i++) {
         int32_t acc = 0;
-        for (int j = 0; j < in_features; j++) {
-            acc += input[j] * weight[i * in_features + j];
+        for (int j = 0; j < FC2_IN_SIZE; j++) {
+            acc += input[j] * weight[i * FC2_IN_SIZE + j];
         }
         acc += bias[i];
         output[i] = acc;
@@ -752,6 +772,8 @@ void hal_softmax_i32(const int32_t *input, const int32_t *lut, int32_t *output, 
         output[i]             = (int32_t)(num / exp_sum_shr);
     }
 }
+
+static inline void matmul_i32_8x8(int32_t *A, int32_t *B, int32_t *C){}
 
 #endif
 
