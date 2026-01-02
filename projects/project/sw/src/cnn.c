@@ -89,15 +89,7 @@ void run_network(ModelWeights *weights, FeatureMaps *buffers) {
 void print_numpy_style(const int32_t *data, int size, int width) {
     printf("[");
     for (int i = 0; i < size; i++) {
-        if (width > 0) {
-            printf("%*d", width, data[i]);
-        } else {
-            printf("%d", data[i]);
-        }
-
-        if (i < size - 1) {
-            printf(" ");
-        }
+        printf("%d ", data[i]);
     }
     printf("]\n");
 }

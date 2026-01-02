@@ -1,0 +1,4 @@
+NAME = test_maxpool
+SRCS = src/test_maxpool.c
+LIBS += klib
+include /Makefile
