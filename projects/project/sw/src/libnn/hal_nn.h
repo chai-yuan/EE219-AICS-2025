@@ -55,6 +55,10 @@ void hal_matmul_i32(const int32_t *A, const int32_t *B, int32_t *C, int M, int K
 
 // 矩阵辅助函数
 
+#define MAX_WEIGHT_BUF_SIZE (1 * 1024) // 能够容纳提升后的权重 (int16)
+#define MAX_IM2COL_BUF_SIZE (8 * 1024) // 能够容纳 Im2Col 后的输入 (int16)
+#define MAX_OUTPUT_BUF_SIZE (1 * 1024) // 能够容纳 int32 的中间计算结果
+
 // 矩阵转置
 static inline void helper_matrix_T(const int32_t *src, int32_t *dst, int h, int w) {
     if (src == NULL || dst == NULL || h <= 0 || w <= 0) {
@@ -253,34 +257,60 @@ static inline void helper_matmul_i8_i16(int8_t *A, int8_t *B, int16_t *C, int M,
 #ifdef HAL_NN_SOFT
 
 void hal_conv2d_i8_i16(const int8_t *input, const int8_t *weight, int16_t *output, const hal_conv_params_t *p) {
-    for (int oc = 0; oc < p->output_c; oc++) {
-        for (int h = 0; h < p->output_h; h++) {
-            for (int w = 0; w < p->output_w; w++) {
+    int16_t g_weight_buffer[MAX_WEIGHT_BUF_SIZE];
+    int16_t g_im2col_buffer[MAX_IM2COL_BUF_SIZE];
+    int32_t g_gemm_output_buffer[MAX_OUTPUT_BUF_SIZE];
 
-                int32_t acc = 0;
-                // CHW 格式遍历
-                for (int ic = 0; ic < p->input_c; ic++) {
-                    for (int kh = 0; kh < p->kernel_size; kh++) {
-                        for (int kw = 0; kw < p->kernel_size; kw++) {
+    int M = p->output_c;
+    int K = p->input_c * p->kernel_size * p->kernel_size;
+    int N = p->output_h * p->output_w;
 
-                            int img_idx = ic * (p->input_h * p->input_w) + (h + kh) * p->input_w + (w + kw);
+    if ((M * K) > MAX_WEIGHT_BUF_SIZE || (K * N) > MAX_IM2COL_BUF_SIZE || (M * N) > MAX_OUTPUT_BUF_SIZE) {
+        printf("ERROR : Buffer 不足 %d %d %d\n", (M * K), (K * N), (M * N));
+        return;
+    }
 
-                            // 权重排列假设为: [Out_C, In_C, K_H, K_W]
-                            int w_idx = oc * (p->input_c * p->kernel_size * p->kernel_size) +
-                                        ic * (p->kernel_size * p->kernel_size) + kh * p->kernel_size + kw;
+    for (int i = 0; i < M * K; i++) {
+        g_weight_buffer[i] = (int16_t)weight[i];
+    }
 
-                            acc += input[img_idx] * weight[w_idx];
-                        }
-                    }
-                }
+    int input_h     = p->input_h;
+    int input_w     = p->input_w;
+    int kernel_size = p->kernel_size;
+    int out_w       = p->output_w;
 
-                int32_t res = acc / p->scale;
-                res         = CLAMP(res, 0, 32768);
+    for (int k_idx = 0; k_idx < K; k_idx++) {
+        int temp = k_idx;
+        int kw   = temp % kernel_size;
+        temp /= kernel_size;
+        int kh = temp % kernel_size;
+        temp /= kernel_size;
+        int ic = temp;
 
-                int out_idx     = oc * (p->output_h * p->output_w) + h * p->output_w + w;
-                output[out_idx] = (int16_t)res;
-            }
+        for (int n_idx = 0; n_idx < N; n_idx++) {
+            int h = n_idx / out_w;
+            int w = n_idx % out_w;
+
+            int in_r    = h + kh;
+            int in_c    = w + kw;
+            int img_idx = ic * (input_h * input_w) + in_r * input_w + in_c;
+
+            g_im2col_buffer[k_idx * N + n_idx] = (int16_t)input[img_idx];
         }
+    }
+
+    helper_matmul_i16_i32(g_weight_buffer, g_im2col_buffer, g_gemm_output_buffer, M, K, N);
+
+    int     total_output_elements = M * N;
+    int32_t scale                 = p->scale;
+
+    for (int i = 0; i < total_output_elements; i++) {
+        int32_t val = g_gemm_output_buffer[i];
+        val         = val / scale;
+
+        val = CLAMP(val, 0, 32768);
+
+        output[i] = (int16_t)val;
     }
 }
 
@@ -434,34 +464,60 @@ static inline void matmul_i32_8x8(int32_t *A, int32_t *B, int32_t *C) {
 #include "rv_vector_ext.h"
 
 void hal_conv2d_i8_i16(const int8_t *input, const int8_t *weight, int16_t *output, const hal_conv_params_t *p) {
-    for (int oc = 0; oc < p->output_c; oc++) {
-        for (int h = 0; h < p->output_h; h++) {
-            for (int w = 0; w < p->output_w; w++) {
+    int16_t g_weight_buffer[MAX_WEIGHT_BUF_SIZE];
+    int16_t g_im2col_buffer[MAX_IM2COL_BUF_SIZE];
+    int32_t g_gemm_output_buffer[MAX_OUTPUT_BUF_SIZE];
 
-                int32_t acc = 0;
-                // CHW 格式遍历
-                for (int ic = 0; ic < p->input_c; ic++) {
-                    for (int kh = 0; kh < p->kernel_size; kh++) {
-                        for (int kw = 0; kw < p->kernel_size; kw++) {
+    int M = p->output_c;
+    int K = p->input_c * p->kernel_size * p->kernel_size;
+    int N = p->output_h * p->output_w;
 
-                            int img_idx = ic * (p->input_h * p->input_w) + (h + kh) * p->input_w + (w + kw);
+    if ((M * K) > MAX_WEIGHT_BUF_SIZE || (K * N) > MAX_IM2COL_BUF_SIZE || (M * N) > MAX_OUTPUT_BUF_SIZE) {
+        printf("ERROR : Buffer 不足 %d %d %d\n", (M * K), (K * N), (M * N));
+        return;
+    }
 
-                            // 权重排列假设为: [Out_C, In_C, K_H, K_W]
-                            int w_idx = oc * (p->input_c * p->kernel_size * p->kernel_size) +
-                                        ic * (p->kernel_size * p->kernel_size) + kh * p->kernel_size + kw;
+    for (int i = 0; i < M * K; i++) {
+        g_weight_buffer[i] = (int16_t)weight[i];
+    }
 
-                            acc += input[img_idx] * weight[w_idx];
-                        }
-                    }
-                }
+    int input_h     = p->input_h;
+    int input_w     = p->input_w;
+    int kernel_size = p->kernel_size;
+    int out_w       = p->output_w;
 
-                int32_t res = acc / p->scale;
-                res         = CLAMP(res, 0, 32768);
+    for (int k_idx = 0; k_idx < K; k_idx++) {
+        int temp = k_idx;
+        int kw   = temp % kernel_size;
+        temp /= kernel_size;
+        int kh = temp % kernel_size;
+        temp /= kernel_size;
+        int ic = temp;
 
-                int out_idx     = oc * (p->output_h * p->output_w) + h * p->output_w + w;
-                output[out_idx] = (int16_t)res;
-            }
+        for (int n_idx = 0; n_idx < N; n_idx++) {
+            int h = n_idx / out_w;
+            int w = n_idx % out_w;
+
+            int in_r    = h + kh;
+            int in_c    = w + kw;
+            int img_idx = ic * (input_h * input_w) + in_r * input_w + in_c;
+
+            g_im2col_buffer[k_idx * N + n_idx] = (int16_t)input[img_idx];
         }
+    }
+
+    helper_matmul_i16_i32(g_weight_buffer, g_im2col_buffer, g_gemm_output_buffer, M, K, N);
+
+    int     total_output_elements = M * N;
+    int32_t scale                 = p->scale;
+
+    for (int i = 0; i < total_output_elements; i++) {
+        int32_t val = g_gemm_output_buffer[i];
+        val         = val / scale;
+
+        val = CLAMP(val, 0, 32768);
+
+        output[i] = (int16_t)val;
     }
 }
 
@@ -622,34 +678,60 @@ static inline void matmul_i32_8x8(int32_t *A, int32_t *B, int32_t *C) {
 }
 
 void hal_conv2d_i8_i16(const int8_t *input, const int8_t *weight, int16_t *output, const hal_conv_params_t *p) {
-    for (int oc = 0; oc < p->output_c; oc++) {
-        for (int h = 0; h < p->output_h; h++) {
-            for (int w = 0; w < p->output_w; w++) {
+    int16_t g_weight_buffer[MAX_WEIGHT_BUF_SIZE];
+    int16_t g_im2col_buffer[MAX_IM2COL_BUF_SIZE];
+    int32_t g_gemm_output_buffer[MAX_OUTPUT_BUF_SIZE];
 
-                int32_t acc = 0;
-                // CHW 格式遍历
-                for (int ic = 0; ic < p->input_c; ic++) {
-                    for (int kh = 0; kh < p->kernel_size; kh++) {
-                        for (int kw = 0; kw < p->kernel_size; kw++) {
+    int M = p->output_c;
+    int K = p->input_c * p->kernel_size * p->kernel_size;
+    int N = p->output_h * p->output_w;
 
-                            int img_idx = ic * (p->input_h * p->input_w) + (h + kh) * p->input_w + (w + kw);
+    if ((M * K) > MAX_WEIGHT_BUF_SIZE || (K * N) > MAX_IM2COL_BUF_SIZE || (M * N) > MAX_OUTPUT_BUF_SIZE) {
+        printf("ERROR : Buffer 不足 %d %d %d\n", (M * K), (K * N), (M * N));
+        return;
+    }
 
-                            // 权重排列假设为: [Out_C, In_C, K_H, K_W]
-                            int w_idx = oc * (p->input_c * p->kernel_size * p->kernel_size) +
-                                        ic * (p->kernel_size * p->kernel_size) + kh * p->kernel_size + kw;
+    for (int i = 0; i < M * K; i++) {
+        g_weight_buffer[i] = (int16_t)weight[i];
+    }
 
-                            acc += input[img_idx] * weight[w_idx];
-                        }
-                    }
-                }
+    int input_h     = p->input_h;
+    int input_w     = p->input_w;
+    int kernel_size = p->kernel_size;
+    int out_w       = p->output_w;
 
-                int32_t res = acc / p->scale;
-                res         = CLAMP(res, 0, 32768);
+    for (int k_idx = 0; k_idx < K; k_idx++) {
+        int temp = k_idx;
+        int kw   = temp % kernel_size;
+        temp /= kernel_size;
+        int kh = temp % kernel_size;
+        temp /= kernel_size;
+        int ic = temp;
 
-                int out_idx     = oc * (p->output_h * p->output_w) + h * p->output_w + w;
-                output[out_idx] = (int16_t)res;
-            }
+        for (int n_idx = 0; n_idx < N; n_idx++) {
+            int h = n_idx / out_w;
+            int w = n_idx % out_w;
+
+            int in_r    = h + kh;
+            int in_c    = w + kw;
+            int img_idx = ic * (input_h * input_w) + in_r * input_w + in_c;
+
+            g_im2col_buffer[k_idx * N + n_idx] = (int16_t)input[img_idx];
         }
+    }
+
+    helper_matmul_i16_i32(g_weight_buffer, g_im2col_buffer, g_gemm_output_buffer, M, K, N);
+
+    int     total_output_elements = M * N;
+    int32_t scale                 = p->scale;
+
+    for (int i = 0; i < total_output_elements; i++) {
+        int32_t val = g_gemm_output_buffer[i];
+        val         = val / scale;
+
+        val = CLAMP(val, 0, 32768);
+
+        output[i] = (int16_t)val;
     }
 }
 
