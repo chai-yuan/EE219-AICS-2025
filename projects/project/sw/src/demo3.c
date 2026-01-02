@@ -12,14 +12,13 @@ int main() {
     setvi8(); // e8
 
     for(int j=0;j<3;j++){
-        custom_vle32_v1(a[j]);
+        custom_vle_v1(a[j]);
         for(int i=0;i<2;i++){
-            custom_vle32_v2(b[i]);
+            custom_vle_v2(b[i]);
             vmul_vv();
             vmv_v_x();
             vredsum_vs();
-            asm volatile("mv x7, %0" :: "r"(&receive));
-            vse32_v();
+            custom_vse(receive);
             c[j][i]=receive[0];
             printf("c[%d][%d] = %d\n", j, i, c[j][i]);
 
