@@ -7,7 +7,7 @@
  *  HAL_NN_CUSTOM   利用自定义指令的实现
  *  HAL_NN_SOFT_OPT 纯软件实现，经过了软件优化，不适合用作硬件调试
  */
-#define HAL_NN_SOFT_OPT
+#define HAL_NN_CUSTOM
 #include "libnn/hal_nn.h"
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
